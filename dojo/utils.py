@@ -1,8 +1,11 @@
+from dojo.authorization.roles_permissions import Permissions
+from dojo.finding.queries import get_authorized_findings
 import re
 import binascii
 import os
 import hashlib
 import bleach
+import mimetypes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from calendar import monthrange
@@ -23,7 +26,7 @@ import calendar as tcalendar
 from dojo.github import add_external_issue_github, update_external_issue_github, close_external_issue_github, reopen_external_issue_github
 from dojo.models import Finding, Engagement, Finding_Group, Finding_Template, Product, \
     Dojo_User, Test, User, System_Settings, Notifications, Endpoint, Benchmark_Type, \
-    Language_Type, Languages, Rule
+    Language_Type, Languages, Rule, Dojo_Group_Member, NOTIFICATION_CHOICES
 from asteval import Interpreter
 from dojo.notifications.helper import create_notification
 import logging
@@ -89,6 +92,9 @@ def do_false_positive_history(new_finding, *args, **kwargs):
         new_finding.false_p = True
         new_finding.active = False
         new_finding.verified = True
+        # Remove the async user kwarg because save() really does not like it
+        # Would rather not add anything to Finding.save()
+        kwargs.pop('async_user')
         super(Finding, new_finding).save(*args, **kwargs)
 
 
@@ -114,26 +120,14 @@ def do_dedupe_finding(new_finding, *args, **kwargs):
     if enabled:
         deduplicationLogger.debug('dedupe for: ' + str(new_finding.id) +
                     ":" + str(new_finding.title))
-        # TODO use test.dedupe_algo and case statement
-        if hasattr(settings, 'DEDUPLICATION_ALGORITHM_PER_PARSER'):
-            scan_type = new_finding.test.test_type.name
-            deduplicationLogger.debug('scan_type for this finding is :' + scan_type)
-            # Default algorithm
-            deduplicationAlgorithm = settings.DEDUPE_ALGO_LEGACY
-            # Check for an override for this scan_type in the deduplication configuration
-            if (scan_type in settings.DEDUPLICATION_ALGORITHM_PER_PARSER):
-                deduplicationAlgorithm = settings.DEDUPLICATION_ALGORITHM_PER_PARSER[scan_type]
-            deduplicationLogger.debug('deduplication algorithm: ' + deduplicationAlgorithm)
-            if(deduplicationAlgorithm == settings.DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL):
-                deduplicate_unique_id_from_tool(new_finding)
-            elif(deduplicationAlgorithm == settings.DEDUPE_ALGO_HASH_CODE):
-                deduplicate_hash_code(new_finding)
-            elif(deduplicationAlgorithm == settings.DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE):
-                deduplicate_uid_or_hash_code(new_finding)
-            else:
-                logger.debug('dedupe legacy start')
-                deduplicate_legacy(new_finding)
-                logger.debug('dedupe legacy start.done.')
+        deduplicationAlgorithm = new_finding.test.deduplication_algorithm
+        deduplicationLogger.debug('deduplication algorithm: ' + deduplicationAlgorithm)
+        if deduplicationAlgorithm == settings.DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL:
+            deduplicate_unique_id_from_tool(new_finding)
+        elif deduplicationAlgorithm == settings.DEDUPE_ALGO_HASH_CODE:
+            deduplicate_hash_code(new_finding)
+        elif deduplicationAlgorithm == settings.DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE:
+            deduplicate_uid_or_hash_code(new_finding)
         else:
             deduplicationLogger.debug("no configuration per parser found; using legacy algorithm")
             deduplicate_legacy(new_finding)
@@ -187,8 +181,8 @@ def deduplicate_legacy(new_finding):
         # ---------------------------------------------------------
 
         if find.endpoints.count() != 0 and new_finding.endpoints.count() != 0:
-            list1 = [e.host_with_port for e in new_finding.endpoints.all()]
-            list2 = [e.host_with_port for e in find.endpoints.all()]
+            list1 = [str(e) for e in new_finding.endpoints.all()]
+            list2 = [str(e) for e in find.endpoints.all()]
 
             if all(x in list1 for x in list2):
                 deduplicationLogger.debug("%s: existing endpoints are present in new finding", find.id)
@@ -306,7 +300,8 @@ def deduplicate_uid_or_hash_code(new_finding):
         # same without "test__engagement=new_finding.test.engagement" condition
         existing_findings = Finding.objects.filter(
             (Q(hash_code__isnull=False) & Q(hash_code=new_finding.hash_code)) |
-            (Q(unique_id_from_tool__isnull=False) & Q(unique_id_from_tool=new_finding.unique_id_from_tool) & Q(test__test_type=new_finding.test.test_type))).exclude(
+            (Q(unique_id_from_tool__isnull=False) & Q(unique_id_from_tool=new_finding.unique_id_from_tool) & Q(test__test_type=new_finding.test.test_type)),
+            test__engagement__product=new_finding.test.engagement.product).exclude(
                 id=new_finding.id).exclude(
                         duplicate=True).order_by('id')
     deduplicationLogger.debug("Found " +
@@ -352,7 +347,7 @@ def set_duplicate(new_finding, existing_finding):
 
 
 def is_duplicate_reopen(new_finding, existing_finding):
-    if (existing_finding.is_Mitigated or existing_finding.mitigated) and not existing_finding.out_of_scope and not existing_finding.false_p and new_finding.active and not new_finding.is_Mitigated:
+    if (existing_finding.is_mitigated or existing_finding.mitigated) and not existing_finding.out_of_scope and not existing_finding.false_p and new_finding.active and not new_finding.is_mitigated:
         return True
     else:
         return False
@@ -361,7 +356,7 @@ def is_duplicate_reopen(new_finding, existing_finding):
 def set_duplicate_reopen(new_finding, existing_finding):
     logger.debug('duplicate reopen existing finding')
     existing_finding.mitigated = new_finding.mitigated
-    existing_finding.is_Mitigated = new_finding.is_Mitigated
+    existing_finding.is_mitigated = new_finding.is_mitigated
     existing_finding.active = new_finding.active
     existing_finding.verified = new_finding.verified
     existing_finding.notes.create(author=existing_finding.reporter,
@@ -1212,6 +1207,10 @@ def get_page_items_and_count(request, items, page_size, prefix='', do_count=True
 
 def handle_uploaded_threat(f, eng):
     name, extension = os.path.splitext(f.name)
+    # Check if threat folder exist.
+    if not os.path.isdir(settings.MEDIA_ROOT + '/threat/'):
+        # Create the folder
+        os.mkdir(settings.MEDIA_ROOT + '/threat/')
     with open(settings.MEDIA_ROOT + '/threat/%s%s' % (eng.id, extension),
               'wb+') as destination:
         for chunk in f.chunks():
@@ -1236,7 +1235,7 @@ def handle_uploaded_selenium(f, cred):
 @dojo_async_task
 @app.task
 @dojo_model_from_id
-def add_external_issue(find, external_issue_provider):
+def add_external_issue(find, external_issue_provider, **kwargs):
     eng = Engagement.objects.get(test=find.test)
     prod = Product.objects.get(engagement=eng)
     logger.debug('adding external issue with provider: ' + external_issue_provider)
@@ -1249,7 +1248,7 @@ def add_external_issue(find, external_issue_provider):
 @dojo_async_task
 @app.task
 @dojo_model_from_id
-def update_external_issue(find, old_status, external_issue_provider):
+def update_external_issue(find, old_status, external_issue_provider, **kwargs):
     prod = Product.objects.get(engagement=Engagement.objects.get(test=find.test))
     eng = Engagement.objects.get(test=find.test)
 
@@ -1261,7 +1260,7 @@ def update_external_issue(find, old_status, external_issue_provider):
 @dojo_async_task
 @app.task
 @dojo_model_from_id
-def close_external_issue(find, note, external_issue_provider):
+def close_external_issue(find, note, external_issue_provider, **kwargs):
     prod = Product.objects.get(engagement=Engagement.objects.get(test=find.test))
     eng = Engagement.objects.get(test=find.test)
 
@@ -1273,7 +1272,7 @@ def close_external_issue(find, note, external_issue_provider):
 @dojo_async_task
 @app.task
 @dojo_model_from_id
-def reopen_external_issue(find, note, external_issue_provider):
+def reopen_external_issue(find, note, external_issue_provider, **kwargs):
     prod = Product.objects.get(engagement=Engagement.objects.get(test=find.test))
     eng = Engagement.objects.get(test=find.test)
 
@@ -1313,7 +1312,7 @@ def process_notifications(request, note, parent_url, parent_title):
         User.objects.filter(username=username).get()
         for username in usernames_to_check
         if User.objects.filter(is_active=True, username=username).exists()
-    ]  # is_staff also?
+    ]
 
     if len(note.entry) > 200:
         note.entry = note.entry[:200]
@@ -1507,6 +1506,8 @@ class Product_Tab():
                                                           mitigated__isnull=True).count()
         self.endpoints_count = Endpoint.objects.filter(
             product=self.product).count()
+        self.endpoint_hosts_count = Endpoint.objects.filter(
+            product=self.product).values('host').distinct().count()
         self.benchmark_type = Benchmark_Type.objects.filter(
             enabled=True).order_by('name')
         self.engagement = None
@@ -1541,6 +1542,9 @@ class Product_Tab():
     def endpoints(self):
         return self.endpoints_count
 
+    def endpoint_hosts(self):
+        return self.endpoint_hosts_count
+
     def benchmark_type(self):
         return self.benchmark_type
 
@@ -1563,8 +1567,8 @@ def tab_view_count(product_id):
     return product, engagements, open_findings, endpoints, benchmark_type
 
 
-# Add a lanaguage to product
-def add_language(product, language):
+def add_language(product, language, files=1, code=1):
+    """Add a language to product"""
     prod_language = Languages.objects.filter(
         language__language__iexact=language, product=product)
 
@@ -1574,7 +1578,7 @@ def add_language(product, language):
                 language__iexact=language)
 
             if language_type:
-                lang = Languages(language=language_type, product=product)
+                lang = Languages(language=language_type, product=product, files=files, code=code)
                 lang.save()
         except Language_Type.DoesNotExist:
             pass
@@ -1628,14 +1632,32 @@ def get_site_url():
 
 
 @receiver(post_save, sender=Dojo_User)
-def set_default_notifications(sender, instance, created, **kwargs):
-    # for new user we create a Notifications object so the default 'alert' notifications work
-    # this needs to be a signal to make it also work for users created via ldap, oauth and other authentication backends
+def user_post_save(sender, instance, created, **kwargs):
+    # For new users we create a Notifications object so the default 'alert' notifications work and
+    # assign them to a default group if specified in the system settings.
+    # This needs to be a signal to make it also work for users created via ldap, oauth and other
+    # authentication backends
     if created:
         logger.info('creating default set of notifications for: ' + str(instance))
-        notifications = Notifications()
-        notifications.user = instance
+        notifications = Notifications(user=instance)
         notifications.save()
+
+        system_settings = System_Settings.objects.get()
+        if system_settings.default_group and system_settings.default_group_role:
+            if (system_settings.default_group_email_pattern and re.fullmatch(system_settings.default_group_email_pattern, instance.email)) or \
+               not system_settings.default_group_email_pattern:
+                logger.info('setting default group for: ' + str(instance))
+                dojo_group_member = Dojo_Group_Member(
+                    group=system_settings.default_group,
+                    user=instance,
+                    role=system_settings.default_group_role)
+                dojo_group_member.save()
+
+    if settings.FEATURE_CONFIGURATION_AUTHORIZATION:
+        # Superusers shall always be staff
+        if instance.is_superuser and not instance.is_staff:
+            instance.is_staff = True
+            instance.save()
 
 
 @receiver(post_save, sender=Engagement)
@@ -1733,6 +1755,7 @@ def sla_compute_and_notify(*args, **kwargs):
             event='sla_breach',
             title=title,
             finding=finding,
+            url=reverse('view_finding', args=(finding.id,)),
             sla_age=sla_age
         )
 
@@ -1761,9 +1784,9 @@ def sla_compute_and_notify(*args, **kwargs):
 
             query = None
             if settings.SLA_NOTIFY_ACTIVE:
-                query = Q(active=True, is_Mitigated=False, duplicate=False)
+                query = Q(active=True, is_mitigated=False, duplicate=False)
             if settings.SLA_NOTIFY_ACTIVE_VERIFIED_ONLY:
-                query = Q(active=True, verified=True, is_Mitigated=False, duplicate=False)
+                query = Q(active=True, verified=True, is_mitigated=False, duplicate=False)
             logger.debug("My query: {}".format(query))
 
             no_jira_findings = {}
@@ -1804,7 +1827,7 @@ def sla_compute_and_notify(*args, **kwargs):
                 jira_issue = None
                 if finding.has_jira_issue:
                     jira_issue = finding.jira_issue
-                elif finding.grouped:
+                elif finding.has_finding_group:
                     jira_issue = finding.finding_group.jira_issue
 
                 if jira_issue:
@@ -1859,11 +1882,21 @@ def sla_compute_and_notify(*args, **kwargs):
         logger.info("Findings SLA is not enabled.")
 
 
-def get_words_for_field(queryset, fieldname):
+def get_words_for_field(model, fieldname):
     max_results = getattr(settings, 'MAX_AUTOCOMPLETE_WORDS', 20000)
-    words = [
-        word for component_name in queryset.order_by().filter(**{'%s__isnull' % fieldname: False}).values_list(fieldname, flat=True).distinct()[:max_results] for word in (component_name.split() if component_name else []) if len(word) > 2
-    ]
+    models = None
+    if model == Finding:
+        models = get_authorized_findings(Permissions.Finding_View, user=get_current_user())
+    elif model == Finding_Template:
+        models = Finding_Template.objects.all()
+
+    if models is not None:
+        words = [
+            word for field_value in models.order_by().filter(**{'%s__isnull' % fieldname: False}).values_list(fieldname, flat=True).distinct()[:max_results] for word in (field_value.split() if field_value else []) if len(word) > 2
+        ]
+    else:
+        words = []
+
     return sorted(set(words))
 
 
@@ -1908,6 +1941,34 @@ def get_object_or_none(klass, *args, **kwargs):
         )
     try:
         return queryset.get(*args, **kwargs)
+    except queryset.model.DoesNotExist:
+        return None
+
+
+def get_last_object_or_none(klass, *args, **kwargs):
+    """
+    Use last() to return an object, or return None
+    does not exist.
+    klass may be a Model, Manager, or QuerySet object. All other passed
+    arguments and keyword arguments are used in the get() query.
+    Like with QuerySet.get(), MultipleObjectsReturned is raised if more than
+    one object is found.
+    """
+    queryset = klass
+
+    if hasattr(klass, '_default_manager'):
+        queryset = klass._default_manager.all()
+
+    if not hasattr(queryset, 'get'):
+        klass__name = klass.__name__ if isinstance(klass, type) else klass.__class__.__name__
+        raise ValueError(
+            "First argument to get_last_object_or_None() must be a Model, Manager, "
+            "or QuerySet, not '%s'." % klass__name
+        )
+    try:
+        results = queryset.filter(*args, **kwargs).order_by('id')
+        logger.debug('last_object_or_none: %s', results.query)
+        return results.last()
     except queryset.model.DoesNotExist:
         return None
 
@@ -2025,3 +2086,33 @@ def prod_name(obj):
         return 'Unknown'
 
     return get_product(obj).name
+
+
+# Returns image locations by default (i.e. uploaded_files/09577eb1-6ccb-430b-bc82-0742d4c97a09.png)
+# if return_objects=True, return the FileUPload object instead of just the file location
+def get_file_images(obj, return_objects=False):
+    logger.debug('getting images for %s:%s', type(obj), obj)
+    files = None
+    if not obj:
+        return files
+    files = obj.files.all()
+
+    images = []
+    for file in files:
+        file_name = file.file.name
+        file_type = mimetypes.guess_type(file_name)[0]
+        if file_type and 'image' in file_type:
+            if return_objects:
+                images.append(file)
+            else:
+                images.append(file_name)
+    return images
+
+
+def get_enabled_notifications_list():
+    # Alerts need to enabled by default
+    enabled = ['alert']
+    for choice in NOTIFICATION_CHOICES:
+        if get_system_setting('enable_{}_notifications'.format(choice[0])):
+            enabled.append(choice[0])
+    return enabled

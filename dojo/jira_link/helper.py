@@ -16,7 +16,7 @@ from dojo.notifications.helper import create_notification
 from django.contrib import messages
 from dojo.celery import app
 from dojo.decorators import dojo_async_task, dojo_model_from_id, dojo_model_to_id
-from dojo.utils import truncate_with_dots, prod_name
+from dojo.utils import truncate_with_dots, prod_name, get_file_images
 from django.urls import reverse
 from dojo.forms import JIRAProjectForm, JIRAEngagementForm
 
@@ -95,6 +95,7 @@ def can_be_pushed_to_jira(obj, form=None):
         return True, None, None
 
     if obj.has_jira_issue:
+        # findings or groups already having an existing jira issue can always be pushed
         return True, None, None
 
     if type(obj) == Finding:
@@ -414,9 +415,26 @@ def jira_transition(jira, issue, transition_id):
 
 
 # Used for unit testing so geting all the connections is manadatory
+def get_jira_updated(finding):
+    if finding.has_jira_issue:
+        j_issue = finding.jira_issue.jira_id
+    elif finding.finding_group and finding.finding_group.has_jira_issue:
+        j_issue = finding.finding_group.jira_issue.jira_id
+
+    if j_issue:
+        project = get_jira_project(finding)
+        issue = jira_get_issue(project, j_issue)
+        return issue.fields.updated
+
+
+# Used for unit testing so geting all the connections is manadatory
 def get_jira_status(finding):
     if finding.has_jira_issue:
         j_issue = finding.jira_issue.jira_id
+    elif finding.finding_group and finding.finding_group.has_jira_issue:
+        j_issue = finding.finding_group.jira_issue.jira_id
+
+    if j_issue:
         project = get_jira_project(finding)
         issue = jira_get_issue(project, j_issue)
         return issue.fields.status
@@ -460,26 +478,36 @@ def get_labels(obj):
     labels = []
     system_settings = System_Settings.objects.get()
     system_labels = system_settings.jira_labels
-    if system_labels is None:
-        return
-    else:
+    if system_labels:
         system_labels = system_labels.split()
-    if len(system_labels) > 0:
         for system_label in system_labels:
             labels.append(system_label)
-    # Update the label with the product name (underscore)
-    labels.append(prod_name(obj).replace(" ", "_"))
+        # Update the label with the product name (underscore)
+        labels.append(prod_name(obj).replace(" ", "_"))
     return labels
 
 
+def get_tags(obj):
+    # Update Label with system setttings label
+    tags = []
+    if isinstance(obj, Finding) or isinstance(obj, Engagement):
+        obj_tags = obj.tags.all()
+        if obj_tags:
+            for tag in obj_tags:
+                tags.append(str(tag.name))
+    return tags
+
+
 def jira_summary(obj):
+    summary = ''
+
     if type(obj) == Finding:
-        return obj.title
+        summary = obj.title
 
     if type(obj) == Finding_Group:
-        return obj.name
+        summary = obj.name
 
-    return None
+    return summary.replace('\r', '').replace('\n', '')[:255]
 
 
 def jira_description(obj):
@@ -512,6 +540,9 @@ def jira_environment(obj):
 
 
 def push_to_jira(obj, *args, **kwargs):
+    if obj is None:
+        raise ValueError('Cannot push None to JIRA')
+
     if isinstance(obj, Finding):
         finding = obj
         if finding.has_jira_issue:
@@ -626,9 +657,11 @@ def add_jira_issue(obj, *args, **kwargs):
                                 }
 
         labels = get_labels(obj)
-        if labels:
+        tags = get_tags(obj)
+        jira_labels = labels + tags
+        if jira_labels:
             if 'labels' in meta['projects'][0]['issuetypes'][0]['fields']:
-                fields['labels'] = labels
+                fields['labels'] = jira_labels
 
         if System_Settings.objects.get().enable_finding_sla:
 
@@ -654,10 +687,15 @@ def add_jira_issue(obj, *args, **kwargs):
             findings = obj.findings.all()
 
         for find in findings:
-            for pic in find.images.all():
-                jira_attachment(
-                    find, jira, new_issue,
-                    settings.MEDIA_ROOT + pic.image_large.name)
+            for pic in get_file_images(find):
+                # It doesn't look like the celery cotainer has anything in the media
+                # folder. Has this feature ever worked?
+                try:
+                    jira_attachment(
+                        find, jira, new_issue,
+                        settings.MEDIA_ROOT + '/' + pic)
+                except FileNotFoundError as e:
+                    logger.info(e)
 
         if jira_project.enable_engagement_epic_mapping:
             eng = obj.test.engagement
@@ -748,9 +786,11 @@ def update_jira_issue(obj, *args, **kwargs):
             meta = get_jira_meta(jira, jira_project)
 
         labels = get_labels(obj)
-        if labels:
+        tags = get_tags(obj)
+        jira_labels = labels + tags
+        if jira_labels:
             if 'labels' in meta['projects'][0]['issuetypes'][0]['fields']:
-                fields['labels'] = labels
+                fields['labels'] = jira_labels
 
         if 'environment' in meta['projects'][0]['issuetypes'][0]['fields']:
             fields['environment'] = jira_environment(obj)
@@ -771,10 +811,15 @@ def update_jira_issue(obj, *args, **kwargs):
             findings = obj.findings.all()
 
         for find in findings:
-            for pic in find.images.all():
-                jira_attachment(
-                    find, jira, issue,
-                    settings.MEDIA_ROOT + pic.image_large.name)
+            for pic in get_file_images(find):
+                # It doesn't look like the celery cotainer has anything in the media
+                # folder. Has this feature ever worked?
+                try:
+                    jira_attachment(
+                        find, jira, issue,
+                        settings.MEDIA_ROOT + '/' + pic)
+                except FileNotFoundError as e:
+                    logger.info(e)
 
         if jira_project.enable_engagement_epic_mapping:
             eng = find.test.engagement
@@ -983,7 +1028,7 @@ def jira_check_attachment(issue, source_file_name):
 @dojo_async_task
 @app.task
 @dojo_model_from_id(model=Engagement)
-def close_epic(eng, push_to_jira):
+def close_epic(eng, push_to_jira, **kwargs):
     engagement = eng
     if not is_jira_enabled():
         return False
@@ -1025,7 +1070,7 @@ def close_epic(eng, push_to_jira):
 @dojo_async_task
 @app.task
 @dojo_model_from_id(model=Engagement)
-def update_epic(engagement):
+def update_epic(engagement, **kwargs):
     logger.debug('trying to update jira EPIC for %d:%s', engagement.id, engagement.name)
 
     if not is_jira_configured_and_enabled(engagement):
@@ -1056,7 +1101,7 @@ def update_epic(engagement):
 @dojo_async_task
 @app.task
 @dojo_model_from_id(model=Engagement)
-def add_epic(engagement):
+def add_epic(engagement, **kwargs):
     logger.debug('trying to create a new jira EPIC for %d:%s', engagement.id, engagement.name)
 
     if not is_jira_configured_and_enabled(engagement):
@@ -1130,7 +1175,7 @@ def jira_get_issue(jira_project, issue_key):
 @app.task
 @dojo_model_from_id(model=Notes, parameter=1)
 @dojo_model_from_id
-def add_comment(obj, note, force_push=False):
+def add_comment(obj, note, force_push=False, **kwargs):
     if not is_jira_configured_and_enabled(obj):
         return False
 
@@ -1347,7 +1392,7 @@ def process_resolution_from_jira(finding, resolution_id, resolution_name, assign
                 logger.debug("Marking related finding of {} as accepted. Creating risk acceptance.".format(jira_issue.jira_key))
                 finding.active = False
                 finding.mitigated = None
-                finding.is_Mitigated = False
+                finding.is_mitigated = False
                 finding.false_p = False
                 ra = Risk_Acceptance.objects.create(
                     accepted_by=assignee_name,
@@ -1362,17 +1407,17 @@ def process_resolution_from_jira(finding, resolution_id, resolution_name, assign
                 finding.active = False
                 finding.verified = False
                 finding.mitigated = None
-                finding.is_Mitigated = False
+                finding.is_mitigated = False
                 finding.false_p = True
                 ra_helper.risk_unaccept(finding)
                 status_changed = True
         else:
             # Mitigated by default as before
-            if not finding.is_Mitigated:
+            if not finding.is_mitigated:
                 logger.debug("Marking related finding of {} as mitigated (default)".format(jira_issue.jira_key))
                 finding.active = False
                 finding.mitigated = jira_now
-                finding.is_Mitigated = True
+                finding.is_mitigated = True
                 finding.mitigated_by, created = User.objects.get_or_create(username='JIRA')
                 finding.endpoints.clear()
                 finding.false_p = False
@@ -1384,7 +1429,7 @@ def process_resolution_from_jira(finding, resolution_id, resolution_name, assign
             logger.debug("Re-opening related finding of {}".format(jira_issue.jira_key))
             finding.active = True
             finding.mitigated = None
-            finding.is_Mitigated = False
+            finding.is_mitigated = False
             finding.false_p = False
             ra_helper.risk_unaccept(finding)
             status_changed = True

@@ -47,11 +47,21 @@ class TrivyParser:
         except:
             data = json.loads(scan_data)
 
-        if not isinstance(data, list):
+        # Legacy format is empty
+        if data is None:
             return list()
+        # Legacy format with results
+        elif isinstance(data, list):
+            results = data
+        else:
+            schema_version = data.get('SchemaVersion', None)
+            if schema_version == 2:
+                results = data.get('Results', None)
+            else:
+                raise ValueError('Schema of Trivy json report is not supported')
 
         items = list()
-        for target_data in data:
+        for target_data in results:
             if not isinstance(target_data, dict) or 'Target' not in target_data:
                 continue
             target = target_data['Target']
@@ -64,7 +74,6 @@ class TrivyParser:
                     package_name = vuln['PkgName']
                     severity = TRIVY_SEVERITIES[vuln['Severity']]
                 except KeyError as exc:
-                    print(vuln)
                     logger.warning('skip vulnerability due %r', exc)
                     continue
                 package_version = vuln.get('InstalledVersion', '')
@@ -74,6 +83,7 @@ class TrivyParser:
                     cwe = int(vuln['CweIDs'][0].split("-")[1])
                 else:
                     cwe = 0
+                type = target_data.get('Type', '')
                 title = ' '.join([
                     vuln_id,
                     package_name,
@@ -82,10 +92,16 @@ class TrivyParser:
                 description = DESCRIPTION_TEMPLATE.format(
                     title=vuln.get('Title', ''),
                     target=target,
-                    type=target_data.get('Type', ''),
+                    type=type,
                     fixed_version=mitigation,
                     description_text=vuln.get('Description', ''),
                 )
+                cvss = vuln.get('CVSS', None)
+                cvssv3 = None
+                if cvss is not None:
+                    nvd = cvss.get('nvd', None)
+                    if nvd is not None:
+                        cvssv3 = nvd.get('V3Vector', None)
                 items.append(
                     Finding(
                         test=test,
@@ -98,8 +114,10 @@ class TrivyParser:
                         mitigation=mitigation,
                         component_name=package_name,
                         component_version=package_version,
+                        cvssv3=cvssv3,
                         static_finding=True,
                         dynamic_finding=False,
+                        tags=[type],
                     )
                 )
         return items

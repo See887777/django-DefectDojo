@@ -54,6 +54,60 @@
     }
   },
   {
+    "pk": 4,
+    "model": "auth.user",
+    "fields": {
+      "username": "user3",
+      "first_name": "",
+      "last_name": "",
+      "is_active": true,
+      "is_superuser": false,
+      "is_staff": false,
+      "last_login": null,
+      "groups": [],
+      "user_permissions": [],
+      "password": "pbkdf2_sha256$36000$pe8Ff8HrBPac$Lb3ee6/R9z/aL9nM+D2AXWTpIt9Pa9kcLueXxYNy1ZY=",
+      "email": "",
+      "date_joined": "2018-04-13T07:59:51.527Z"
+    }
+  },
+  {
+    "pk": 5,
+    "model": "auth.user",
+    "fields": {
+      "username": "user4",
+      "first_name": "",
+      "last_name": "",
+      "is_active": true,
+      "is_superuser": false,
+      "is_staff": false,
+      "last_login": null,
+      "groups": [],
+      "user_permissions": [],
+      "password": "pbkdf2_sha256$36000$pe8Ff8HrBPac$Lb3ee6/R9z/aL9nM+D2AXWTpIt9Pa9kcLueXxYNy1ZY=",
+      "email": "",
+      "date_joined": "2018-04-13T07:59:51.527Z"
+    }
+  },
+  {
+    "pk": 6,
+    "model": "auth.user",
+    "fields": {
+      "username": "user5",
+      "first_name": "",
+      "last_name": "",
+      "is_active": true,
+      "is_superuser": false,
+      "is_staff": false,
+      "last_login": null,
+      "groups": [],
+      "user_permissions": [],
+      "password": "pbkdf2_sha256$36000$pe8Ff8HrBPac$Lb3ee6/R9z/aL9nM+D2AXWTpIt9Pa9kcLueXxYNy1ZY=",
+      "email": "",
+      "date_joined": "2018-04-13T07:59:51.527Z"
+    }
+  },
+  {
     "pk": "2dqr18yqu9mzb87abk0okid75w2clakl",
     "model": "sessions.session",
     "fields": {
@@ -115,13 +169,12 @@
     "pk": 1,
     "model": "dojo.system_settings",
     "fields": {
-      "s_finding_severity_naming": false,
       "jira_labels": null,
       "team_name": "",
       "url_prefix": "",
       "enable_slack_notifications": false,
       "enable_mail_notifications": false,
-      "mail_notifications_from": "from@example.com",
+      "email_from": "no-reply@example.com",
       "false_positive_history": false,
       "msteams_url": "",
       "slack_token": "",
@@ -152,7 +205,7 @@
       "slack_username": null,
       "cell_number": "",
       "title": null,
-      "twitter_username": null,
+      "twitter_username": "#admin",
       "user": 1,
       "block_execution": false,
       "github_username": null
@@ -215,6 +268,24 @@
   },
   {
     "pk": 1,
+    "model": "dojo.product_type_member",
+    "fields": {
+      "product_type": 1,
+      "user": 1,
+      "role": 4
+    }
+  },
+  {
+    "pk": 2,
+    "model": "dojo.product_type_member",
+    "fields": {
+      "product_type": 1,
+      "user": 2,
+      "role": 4
+    }
+  },
+  {
+    "pk": 1,
     "model": "dojo.report_type",
     "fields": {
       "name": "Type 1",
@@ -268,7 +339,7 @@
     "pk": 120,
     "model": "dojo.test_type",
     "fields": {
-        "name": "Generic Findings Import"
+        "name": "Xanitizer Scan"
     }
   },
   {
@@ -296,15 +367,7 @@
       "technical_contact": 3,
       "product_manager": 1,
       "team_manager": 2,
-      "manager": "0",
-      "tech_contact": "0",
       "tid": 0,
-      "prod_manager": "0",
-      "authorized_users": [
-        1,
-        2,
-        3
-      ],
       "description": "test product"
     }
   },
@@ -319,14 +382,7 @@
       "technical_contact": 2,
       "product_manager": 2,
       "team_manager": 3,
-      "manager": "0",
-      "tech_contact": "0",
       "tid": 0,
-      "prod_manager": "0",
-      "authorized_users": [
-        2,
-        3
-      ],
       "description": "test product"
     }
   },
@@ -341,15 +397,44 @@
       "technical_contact": 3,
       "product_manager": 1,
       "team_manager": 3,
-      "manager": "0",
-      "tech_contact": "0",
       "tid": 0,
-      "prod_manager": "0",
-      "authorized_users": [
-        1,
-        3
-      ],
       "description": "test product"
+    }
+  },
+  {
+    "pk": 1,
+    "model": "dojo.product_member",
+    "fields": {
+      "product": 1,
+      "user": 1,
+      "role": 4
+    }
+  },
+  {
+    "pk": 2,
+    "model": "dojo.product_member",
+    "fields": {
+      "product": 1,
+      "user": 2,
+      "role": 4
+    }
+  },
+  {
+    "pk": 4,
+    "model": "dojo.product_member",
+    "fields": {
+      "product": 2,
+      "user": 2,
+      "role": 4
+    }
+  },
+  {
+    "pk": 6,
+    "model": "dojo.product_member",
+    "fields": {
+      "product": 3,
+      "user": 1,
+      "role": 4
     }
   },
   {
@@ -367,30 +452,6 @@
       "website": null,
       "website_found": null,
       "created": "2018-08-16T16:58:23.908Z"
-    }
-  },
-  {
-    "pk": 1,
-    "model": "dojo.engagement_type",
-    "fields": {
-      "name": "Type 1",
-      "id": 1
-    }
-  },
-  {
-    "pk": 2,
-    "model": "dojo.engagement_type",
-    "fields": {
-      "name": "Type 2",
-      "id": 2
-    }
-  },
-  {
-    "pk": 3,
-    "model": "dojo.engagement_type",
-    "fields": {
-      "name": "CI/CD",
-      "id": 3
     }
   },
   {
@@ -428,7 +489,6 @@
       "description": "test Engagement",
       "reason": null,
       "requester": null,
-      "eng_type": 3,
       "active": true,
       "done_testing": false,
       "target_end": "2018-04-12",
@@ -459,7 +519,6 @@
       "description": "test Engagement",
       "reason": null,
       "requester": null,
-      "eng_type": null,
       "active": true,
       "done_testing": false,
       "target_end": "2018-04-12",
@@ -490,7 +549,6 @@
       "description": "test Engagement",
       "reason": null,
       "requester": null,
-      "eng_type": null,
       "active": true,
       "done_testing": false,
       "target_end": "2018-04-04",
@@ -524,7 +582,6 @@
       "description": "test Engagement",
       "reason": null,
       "requester": null,
-      "eng_type": null,
       "active": true,
       "done_testing": false,
       "target_end": "2018-04-12",
@@ -555,11 +612,10 @@
       "description": "test Engagement",
       "reason": null,
       "requester": null,
-      "eng_type": null,
-      "active": true,
+"active": true,
       "done_testing": false,
       "target_end": "2018-04-12",
-      "name": "April monthly engagement",
+      "name": "April monthly engagement2",
       "check_list": true,
       "target_start": "2018-04-12",
       "api_test": true,
@@ -586,11 +642,10 @@
       "description": "test Engagement",
       "reason": null,
       "requester": null,
-      "eng_type": null,
       "active": true,
       "done_testing": false,
       "target_end": "2018-04-12",
-      "name": "April monthly engagement",
+      "name": "April monthly engagement3",
       "check_list": true,
       "target_start": "2018-04-12",
       "api_test": true,
@@ -605,10 +660,9 @@
       "product": 2,
       "protocol": "http",
       "fragment": null,
-      "fqdn": "example.com",
       "host": "127.0.0.1",
       "query": null,
-      "path": "/endpoint/420/edit/",
+      "path": "endpoint/420/edit/",
       "port": 80
     }
   },
@@ -619,10 +673,9 @@
       "product": 1,
       "protocol": "ftp",
       "fragment": null,
-      "fqdn": "www.example.com",
       "host": "localhost",
       "query": null,
-      "path": "/",
+      "path": null,
       "port": 21
     }
   },
@@ -633,8 +686,7 @@
       "product": 3,
       "protocol": "ssh",
       "fragment": null,
-      "fqdn": "www.example.com",
-      "host": "127.0.1",
+      "host": "127.0.0.1",
       "query": null,
       "path": null,
       "port": 22
@@ -670,6 +722,7 @@
       "lead": null,
       "estimated_time": "00:00:00",
       "test_type": 1,
+      "scan_type": "ZAP Scan",
       "engagement": 1,
       "environment": 1,
       "target_start": "2017-12-01T00:00:00Z",
@@ -686,6 +739,8 @@
       "lead": null,
       "estimated_time": "00:00:00",
       "test_type": 1,
+      "scan_type": "ZAP Scan",
+      "title": "My ZAP Scan",
       "engagement": 4,
       "environment": 1,
       "target_start": "2017-12-01T00:00:00Z",
@@ -718,6 +773,7 @@
       "lead": null,
       "estimated_time": "00:00:00",
       "test_type": 999,
+      "scan_type": "Checkmarx Scan detailed",
       "engagement": 5,
       "environment": 1,
       "target_start": "2017-12-01T00:00:00Z",
@@ -734,6 +790,7 @@
       "lead": null,
       "estimated_time": "00:00:00",
       "test_type": 999,
+      "scan_type": "Checkmarx Scan detailed",
       "engagement": 5,
       "environment": 1,
       "target_start": "2017-12-01T00:00:00Z",
@@ -750,6 +807,7 @@
       "lead": null,
       "estimated_time": "00:00:00",
       "test_type": 555,
+      "scan_type": "Veracode Scan",
       "engagement": 5,
       "environment": 1,
       "target_start": "2017-12-01T00:00:00Z",
@@ -813,13 +871,12 @@
     "pk": 2,
     "model": "dojo.finding",
     "fields": {
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2020-05-21",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "High",
@@ -827,7 +884,6 @@
       "verified": true,
       "severity": "High",
       "title": "High Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": false,
       "mitigation": "test mitigation",
@@ -843,7 +899,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": true,
       "line": null,
@@ -855,7 +910,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "5d368a051fdec959e08315a32ef633ba5711bed6e8e75319ddee2cab4d4608c7",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -864,13 +918,12 @@
     "pk": 3,
     "model": "dojo.finding",
     "fields": {
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2021-01-01",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "High",
@@ -878,7 +931,6 @@
       "verified": false,
       "severity": "High",
       "title": "High Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": true,
       "mitigation": "test mitigation",
@@ -894,7 +946,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": false,
       "line": null,
@@ -906,7 +957,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "5d368a051fdec959e08315a32ef633ba5711bed6e8e75319ddee2cab4d4608c7",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -915,13 +965,12 @@
     "pk": 4,
     "model": "dojo.finding",
     "fields": {
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2018-01-01",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "High",
@@ -929,7 +978,6 @@
       "verified": false,
       "severity": "High",
       "title": "High Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": true,
       "mitigation": "test mitigation",
@@ -945,7 +993,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": false,
       "line": null,
@@ -957,7 +1004,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "5d368a051fdec959e08315a32ef633ba5711bed6e8e75319ddee2cab4d4608c7",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -966,13 +1012,12 @@
     "pk": 5,
     "model": "dojo.finding",
     "fields": {
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2018-01-01",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "High",
@@ -980,7 +1025,6 @@
       "verified": false,
       "severity": "High",
       "title": "High Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": true,
       "mitigation": "test mitigation",
@@ -996,7 +1040,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": false,
       "line": null,
@@ -1008,7 +1051,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "5d368a051fdec959e08315a32ef633ba5711bed6e8e75319ddee2cab4d4608c7",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -1017,13 +1059,12 @@
     "pk": 6,
     "model": "dojo.finding",
     "fields": {
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2018-01-01",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "High",
@@ -1031,7 +1072,6 @@
       "verified": false,
       "severity": "High",
       "title": "High Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": true,
       "mitigation": "test mitigation",
@@ -1047,7 +1087,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": false,
       "line": null,
@@ -1059,7 +1098,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "5d368a051fdec959e08315a32ef633ba5711bed6e8e75319ddee2cab4d4608c7",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -1068,13 +1106,12 @@
     "pk": 7,
     "model": "dojo.finding",
     "fields": {
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2017-12-31",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "High",
@@ -1082,7 +1119,6 @@
       "verified": false,
       "severity": "High",
       "title": "DUMMY FINDING",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": false,
       "mitigation": "MITIGATION",
@@ -1098,7 +1134,6 @@
       "description": "TEST finding",
       "mitigated_by": null,
       "reporter": 2,
-      "sourcefile": null,
       "mitigated": null,
       "active": false,
       "line": 100,
@@ -1112,7 +1147,6 @@
       ],
       "dynamic_finding": false,
       "hash_code": "c89d25e445b088ba339908f68e15e3177b78d22f3039d1bfea51c4be251bf4e0",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -1122,13 +1156,12 @@
     "pk": 22,
     "model": "dojo.finding",
     "fields": {
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2020-05-21",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "Low",
@@ -1136,7 +1169,6 @@
       "verified": true,
       "severity": "Low",
       "title": "Low Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": false,
       "mitigation": "test mitigation",
@@ -1152,7 +1184,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": true,
       "line": 123,
@@ -1164,7 +1195,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "9aca00affd340c4da02c934e7e3106a45c6ad0911da479daae421b3b28a2c1aa",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -1173,13 +1203,12 @@
     "pk": 23,
     "model": "dojo.finding",
     "fields": {
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2021-01-01",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "Low",
@@ -1187,7 +1216,6 @@
       "verified": false,
       "severity": "Low",
       "title": "Low Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": true,
       "mitigation": "test mitigation",
@@ -1203,7 +1231,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": false,
       "line": 123,
@@ -1215,7 +1242,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "9aca00affd340c4da02c934e7e3106a45c6ad0911da479daae421b3b28a2c1aa",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -1224,13 +1250,12 @@
     "pk": 24,
     "model": "dojo.finding",
     "fields": {
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2018-01-01",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "Low",
@@ -1238,7 +1263,6 @@
       "verified": false,
       "severity": "Low",
       "title": "Low Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": true,
       "mitigation": "test mitigation",
@@ -1254,7 +1278,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": false,
       "line": 123,
@@ -1266,7 +1289,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "9aca00affd340c4da02c934e7e3106a45c6ad0911da479daae421b3b28a2c1aa",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -1276,13 +1298,12 @@
     "model": "dojo.finding",
     "fields": {
       "unique_id_from_tool": 12345,
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2020-05-01",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "Low",
@@ -1290,7 +1311,6 @@
       "verified": true,
       "severity": "Low",
       "title": "Low Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": false,
       "mitigation": "test mitigation",
@@ -1306,7 +1326,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": true,
       "line": 123,
@@ -1318,7 +1337,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "9aca00affd340c4da02c934e7e3106a45c6ad0911da479daae421b3b28a2c1aa",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -1328,13 +1346,12 @@
     "model": "dojo.finding",
     "fields": {
       "unique_id_from_tool": 12345,
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2018-01-01",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "Low",
@@ -1342,7 +1359,6 @@
       "verified": false,
       "severity": "Low",
       "title": "Low Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": true,
       "mitigation": "test mitigation",
@@ -1358,7 +1374,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": false,
       "line": 123,
@@ -1370,7 +1385,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "9aca00affd340c4da02c934e7e3106a45c6ad0911da479daae421b3b28a2c1aa",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -1380,13 +1394,12 @@
     "model": "dojo.finding",
     "fields": {
       "unique_id_from_tool": 6789,
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2020-05-01",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "Low",
@@ -1394,7 +1407,6 @@
       "verified": true,
       "severity": "Low",
       "title": "UID Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": false,
       "mitigation": "test mitigation",
@@ -1410,7 +1422,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": true,
       "line": 123,
@@ -1422,7 +1433,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "6f8d0bf970c14175e597843f4679769a4775742549d90f902ff803de9244c7e1",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -1432,13 +1442,12 @@
     "model": "dojo.finding",
     "fields": {
       "unique_id_from_tool": 6789,
-      "line_number": null,
       "last_reviewed_by": null,
       "reviewers": [],
       "static_finding": false,
       "date": "2018-01-01",
       "references": "",
-      "images": [],
+      "files": [],
       "payload": null,
       "under_defect_review": false,
       "impact": "Low",
@@ -1446,7 +1455,6 @@
       "verified": false,
       "severity": "Low",
       "title": "UID Impact Test Finding",
-      "sourcefilepath": null,
       "param": null,
       "duplicate": true,
       "mitigation": "test mitigation",
@@ -1462,7 +1470,6 @@
       "description": "test finding",
       "mitigated_by": null,
       "reporter": 1,
-      "sourcefile": null,
       "mitigated": null,
       "active": false,
       "line": 123,
@@ -1474,7 +1481,6 @@
       "notes": [],
       "dynamic_finding": false,
       "hash_code": "6f8d0bf970c14175e597843f4679769a4775742549d90f902ff803de9244c7e1",
-      "is_template": false,
       "endpoints": [],
       "last_reviewed": null
     }
@@ -1570,13 +1576,15 @@
     "pk": 2,
     "model": "dojo.jira_instance",
     "fields": {
+        "configuration_name": "Happy little JIRA 2",
         "url": "https://defectdojo.atlassian.net/",
-        "username": "YOUR USERNAME HERE",
-        "password": "YOU API TOKEN HERE",
+        "username": "YOUR USERNAME",
+        "password": "YOU API TOKEN",
         "default_issue_type": "Task",
         "epic_name_id": 10011,
         "open_status_key": 11,
         "close_status_key": 41,
+        "info_mapping_severity": "Trivial",
         "low_mapping_severity": "Low",
         "medium_mapping_severity": "Medium",
         "high_mapping_severity": "High",
@@ -1589,9 +1597,11 @@
     "pk": 3,
     "model": "dojo.jira_instance",
     "fields": {
+      "configuration_name": "Happy little JIRA 3",
       "username": "defect.dojo",
       "default_issue_type": "Task",
       "finding_text": "",
+      "info_mapping_severity": "Trivial",
       "low_mapping_severity": "test severity",
       "url": "http://www.testjira.com",
       "medium_mapping_severity": "test severity",
@@ -1607,9 +1617,11 @@
     "pk": 4,
     "model": "dojo.jira_instance",
     "fields": {
+      "configuration_name": "Happy little JIRA 4",
       "username": "defect.dojo",
       "default_issue_type": "Spike",
       "finding_text": "",
+      "info_mapping_severity": "Trivial",
       "low_mapping_severity": "test severity",
       "url": "http://www.testjira.com",
       "medium_mapping_severity": "test severity",
@@ -1795,11 +1807,11 @@
   },
   {
     "pk": 1,
-    "model": "dojo.sonarqube_product",
+    "model": "dojo.product_api_scan_configuration",
     "fields": {
       "product": 2,
-      "sonarqube_project_key": "dojo_sonar_key",
-      "sonarqube_tool_config": 3
+      "service_key_1": "dojo_sonar_key",
+      "tool_configuration": 3
     }
   },
   {
@@ -2208,6 +2220,136 @@
     "fields": {
       "user": 3,
       "created": "2018-04-16T06:54:35.940Z"
+    }
+  },
+  {
+    "pk": "184770c4c3256aba904297610fbb4da3fa15ba34",
+    "model": "authtoken.token",
+    "fields": {
+      "user": 4,
+      "created": "2018-04-16T06:54:35.933Z"
+    }
+  },
+  {
+    "pk": "184770c4c3256aba904297610fbb4da3fa15ba35",
+    "model": "authtoken.token",
+    "fields": {
+      "user": 5,
+      "created": "2018-04-16T06:54:35.933Z"
+    }
+  },
+  {
+    "pk": "184770c4c3256aba904297610fbb4da3fa15ba36",
+    "model": "authtoken.token",
+    "fields": {
+      "user": 6,
+      "created": "2018-04-16T06:54:35.933Z"
+    }
+  },
+  {
+    "pk": "1",
+    "model": "dojo.dojo_group",
+    "fields": {
+      "name": "Group 1 Testdata",
+      "description": "Testdata description"
+    }
+  },
+  {
+    "pk": "2",
+    "model": "dojo.dojo_group",
+    "fields": {
+      "name": "Group 2 Testdata",
+      "description": "Testdata description"
+    }
+  },
+  {
+    "pk": 1,
+    "model": "dojo.product_type_group",
+    "fields": {
+      "product_type": 1,
+      "group": 1,
+      "role": 4
+    }
+  },
+  {
+    "pk": 1,
+    "model": "dojo.dojo_group_member",
+    "fields": {
+      "group": 1,
+      "user": 1,
+      "role": 4
+    }
+  },
+  {
+    "pk": 1,
+    "model": "dojo.product_group",
+    "fields": {
+      "product": 1,
+      "group": 1,
+      "role": 4
+    }
+  },
+  {
+    "pk": 1,
+    "model": "dojo.global_role",
+    "fields": {
+      "user": 1,
+      "role": 4
+    }
+  },
+  {
+    "pk": 2,
+    "model": "dojo.global_role",
+    "fields": {
+      "user": 6,
+      "role": 4
+    }
+  },
+  {
+    "pk": 3,
+    "model": "dojo.global_role",
+    "fields": {
+      "user": 5,
+      "role": 5
+    }
+  },
+  {
+    "model": "dojo.language_type",
+    "pk": 1,
+    "fields": {
+        "language": "JSON",
+        "color": "#882B0F"
+    }
+  },
+  {
+    "model": "dojo.language_type",
+    "pk": 2,
+    "fields": {
+        "language": "Python",
+        "color": "#3572A5"
+    }
+  },
+  {
+    "model": "dojo.languages",
+    "pk": 1,
+    "fields": {
+        "language": 1,
+        "product": 1,
+        "user": 1,
+        "files": 2,
+        "blank": 3,
+        "comment": 4,
+        "code": 5,
+        "created": "2018-04-16T06:54:35.940Z"
+    }
+  },
+  {
+    "pk": 1,
+    "model": "dojo.notifications",
+    "fields": {
+      "product": 1,
+      "user": 2,
+      "product_type_added": ["slack"]
     }
   }
 ]
