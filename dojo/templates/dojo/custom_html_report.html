@@ -4,7 +4,7 @@
 <html lang="en">
     <meta charset="UTF-8">
     <title>{{ report_name }}</title>
-    <link href="{{ host }}{% static "bootswatch/readable/bootstrap.min.css" %}" rel="stylesheet">
+    <link href="{% static "bootswatch/readable/bootstrap.min.css" %}" rel="stylesheet">
     <style type="text/css">
         @import url(https://fonts.googleapis.com/css?family=Roboto+Slab:400,700);
 
@@ -166,6 +166,7 @@
         }
     </style>
 {% block content %}
+    {{ block.super }}
     <div class="container" id="html_report">
         {% for widget in widgets %}
             {{ widget.get_html }}

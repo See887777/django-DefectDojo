@@ -3,6 +3,7 @@
 {% load authorization_tags %}
 
 {% block content %}
+    {{ block.super }}
 <h3 id="id_heading"> User {{ user.first_name }} {{ user.last_name }}</h3>
 <div class="row">
     <div id="tests" class="col-md-8">
@@ -18,7 +19,7 @@
                                 <span class="caret"></span>
                             </button>
                             <ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdownMenu1">
-                                {% if request.user.is_superuser %}
+                                {% if "auth.change_user"|has_configuration_permission %}
                                 <li>
                                     <a class="" href="{% url 'edit_user' user.id %}">
                                         <i class="fa fa-pencil-square-o"></i> Edit</a>
@@ -29,7 +30,7 @@
                                     <a href="{% url 'action_history' user|content_type user.id %}">
                                         <i class="fa fa-history"></i> View History</a>
                                 </li>
-                                {% if request.user.is_superuser and user.id != request.user.id %}
+                                {% if "auth.delete_user"|has_configuration_permission and user.id != request.user.id %}
                                 <li role="separator" class="divider"></li>
                                 <li>
                                     <a class="" href="{% url 'delete_user' user.id %}" id="deleteUser"> 
@@ -99,11 +100,13 @@
                 </table>
             </div>
         </div>
-        {% if 'FEATURE_AUTHORIZATION_V2'|setting_enabled %}
         <div class="panel panel-default">
             <div class="panel-heading">
                 <div class="clearfix">
-                    <h4 class="pull-left">Product Type Members</h4>
+                    <h4 class="pull-left">Product Type Membership</h4>
+                    &nbsp;
+                    <a href="https://documentation.defectdojo.com/usage/permissions/" target="_blank">
+                        <i class="fa fa-question-circle"></i></a>
                     {% if request.user.is_superuser %}
                     <div class="dropdown pull-right">
                         <button class="btn btn-primary dropdown-toggle" aria-label="Actions" type="button" id="dropdownMenuAddProductTypeMember"
@@ -114,13 +117,10 @@
                         <ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdownMenu2">
                             <li role="presentation">
                                 <a id="addProductTypeMember" href="{% url 'add_product_type_member_user' user.id %}">
-                                    <i class="fa fa-plus"></i> Add Product Type
+                                    <i class="fa fa-plus"></i> Add Product Types
                                 </a>
                             </li>
                         </ul>
-                        &nbsp;
-                        <a href="https://defectdojo.github.io/django-DefectDojo/basics/permissions/" target="_blank">
-                            <i class="fa fa-question-circle text-low"></i></a>
                     </div>
                     {% endif %}
                 </div>
@@ -161,7 +161,7 @@
                                 </ul>
                             </td>
                             <td name="member_product_type"><a href="{% url 'view_product_type' member.product_type.id %}">{{ member.product_type }}</a></td>
-                            <td name="member_product_type_role">{% role_as_string member.role %}</td>
+                            <td name="member_product_type_role">{{ member.role }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -176,7 +176,10 @@
         <div class="panel panel-default">
             <div class="panel-heading">
                 <div class="clearfix">
-                    <h4 class="pull-left">Product Members</h4>
+                    <h4 class="pull-left">Product Membership</h4>
+                    &nbsp;
+                    <a href="https://documentation.defectdojo.com/usage/permissions/" target="_blank">
+                        <i class="fa fa-question-circle"></i></a>
                     {% if request.user.is_superuser %}
                     <div class="dropdown pull-right">
                         <button class="btn btn-primary dropdown-toggle" aria-label="Actions" type="button"  id="dropdownMenuAddProductMember"
@@ -187,13 +190,10 @@
                         <ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdownMenu3">
                             <li role="presentation">
                                 <a id="addProductMember" href="{% url 'add_product_member_user' user.id %}">
-                                    <i class="fa fa-plus"></i> Add Product
+                                    <i class="fa fa-plus"></i> Add Products
                                 </a>
                             </li>
                         </ul>
-                        &nbsp;
-                        <a href="https://defectdojo.github.io/django-DefectDojo/basics/permissions/" target="_blank">
-                            <i class="fa fa-question-circle text-low"></i></a>
                     </div>
                     {% endif %}
                 </div>
@@ -234,7 +234,7 @@
                                 </ul>
                             </td>
                             <td name="member_product"><a href="{% url 'view_product' member.product.id %}">{{ member.product }}</a></td>
-                            <td name="member_product_role">{% role_as_string member.role %}</td>
+                            <td name="member_product_role">{{ member.role }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -246,7 +246,80 @@
             </div>
             {% endif %}
         </div>
-        {% endif %}
+
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <div class="clearfix">
+                    <h4 class="pull-left">Group Membership</h4>
+                    &nbsp;
+                    <a href="https://documentation.defectdojo.com/usage/permissions/#groups" target="_blank">
+                        <i class="fa fa-question-circle"></i></a>
+                    {% if request.user.is_superuser %}
+                    <div class="dropdown pull-right">
+                        <button class="btn btn-primary dropdown-toggle" aria-label="Actions" type="button" id="dropdownMenuAddGroupMember"
+                                data-toggle="dropdown" aria-expanded="true">
+                            <span class="fa fa-bars"></span>
+                            <span class="caret"></span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdownMenu4">
+                            <li role="presentation">
+                                <a id="addGroupMember" href="{% url 'add_group_member_user' user.id %}">
+                                    <i class="fa fa-plus"></i> Add Groups
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% if group_members %}
+            <div class="table-responsive">
+                <table class="tablesorter-bootstrap table table-condensed table-striped">
+                    <thead>
+                    <tr>
+                        <th></th>
+                        <th>Group</th>
+                        <th>Group role</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for member in group_members %}
+                    <tr>
+                        <td>
+                            <ul>
+                                <li class="dropdown" style="list-style:none;position:absolute">
+                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown" name="dropdownManageProductTypeMember"
+                                       aria-expanded="true">&nbsp;<b class="fa fa-ellipsis-v"></b>&nbsp;</a>
+                                    <ul class="dropdown-menu">
+                                        {% if member.group|has_object_permission:"Group_Manage_Members" %}
+                                        <li>
+                                            <a name="editProductTypeMember" href="{% url 'edit_group_member' member.id %}">
+                                                <i class="fa fa-pencil-square-o"></i> Edit</a>
+                                        </li>
+                                        {% endif %}
+                                        {% if member|has_object_permission:"Group_Member_Delete" %}
+                                        <li>
+                                            <a name="deleteProductTypeMember" href="{% url 'delete_group_member' member.id %}">
+                                                <i class="fa fa-trash"></i> Delete</a>
+                                        </li>
+                                        {% endif %}
+                                    </ul>
+                                </li>
+                            </ul>
+                        </td>
+                        <td name="group_name"><a href="{% url 'view_group' member.group.id %}">{{ member.group }}</a></td>
+                        <td name="group_role">{{ member.role }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="panel-body">
+                <small class="text-muted"><em>No group members found.</em></small>
+            </div>
+            {% endif %}
+        </div>
     </div>
     <div class="col-md-4">
         <div class="panel panel-default-secondary">
@@ -262,16 +335,6 @@
                             <td style="width: 200px;"><strong>Active</strong></td>
                             <td>
                                 {% if user.is_active %}
-                                <i class="text-success fa fa-check"></i>
-                                {% else %}
-                                <i class="text-danger fa fa-times"></i>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="width: 200px;"><strong>Staff</strong></td>
-                            <td>
-                                {% if user.is_staff %}
                                 <i class="text-success fa fa-check"></i>
                                 {% else %}
                                 <i class="text-danger fa fa-times"></i>
@@ -298,36 +361,94 @@
                                 {% endif %}
                             </td>
                         </tr>
-                        {% if not 'FEATURE_AUTHORIZATION_V2'|setting_enabled %}
                         <tr>
-                            <td style="width: 200px;"><strong>Authorized Products</strong></td>
-                            <td>
-                                {% if authorized_products.all.count > 1 %}
-                                {% for au in authorized_products.all %}
-                                {{au}}{%if not forloop.last%},{%endif%}
-                                {% endfor %}
-                                {% else %}
-                                {{ authorized_products.all.0 }}
-                                {% endif %}
-                            </td>
+                            <td style="width: 200px;"><strong>Global role</strong></td>
+                            <td>{% if user.global_role.role %} {{ user.global_role.role }} {% endif %}</td>
                         </tr>
-                        <tr>
-                            <td style="width: 200px;"><strong>Authorized Product Types</strong></td>
-                            <td>
-                                {% if authorized_product_types.all.count > 1 %}
-                                {% for au in authorized_product_types.all %}
-                                {{au}}{%if not forloop.last%},{%endif%}
-                                {% endfor %}
-                                {% else %}
-                                {{ authorized_product_types.all.0 }}
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endif %}
                     </tbody>
                 </table>
             </div>
         </div>
+        <!-- Configuration permissions -->
+        {% if not user.is_superuser %}
+        <div class="panel panel-default-secondary" id="edit_permissions">
+            <div class="panel-heading">
+                <h3 class="panel-title"><span class="fa fa-unlock-alt" aria-hidden="true"></span>&nbsp;&nbsp;Configuration Permissions</h3>
+            </div>
+            <form id="edit_permissions_form" class="form-horizontal" method="post" action="{% url 'edit_user_permissions' user.id %}">{% csrf_token %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <tr>
+                        <td id="saving_permissions">&nbsp;</td>
+                        <td class="centered"><strong>View</strong></td>
+                        <td class="centered"><strong>Add</strong></td>
+                        <td class="centered"><strong>Edit</strong></td>
+                        <td class="centered"><strong>Delete</strong></td>
+                    </tr>
+                    {% for field in configuration_permission_form.permission_fields %}
+                    <tr>
+                        <td><strong>{{ field.display_name }}</strong></td>
+                        <td class="centered">
+                            {% if field.view_codename %}
+                            <input id="id_{{ field.view_codename }}" 
+                                {% if not request.user.is_superuser %}disabled{% endif %}
+                                name="{{ field.view_codename }}" 
+                                aria-label="{{ field.view_codename }}" 
+                                type="checkbox" 
+                                {% if user|user_has_configuration_permission_without_group:field.view_codename %}checked{% endif %} />
+                            {% endif %}
+                        </td>
+                        <td class="centered">
+                            {% if field.add_codename %}
+                            <input id="id_{{ field.add_codename }}"
+                                {% if not request.user.is_superuser %}disabled{% endif %}
+                                name="{{ field.add_codename }}"
+                                aria-label="{{ field.add_codename }}"
+                                type="checkbox"
+                                {% if user|user_has_configuration_permission_without_group:field.add_codename %}checked{% endif %} />
+                            {% endif %}
+                        </td>
+                        <td class="centered">
+                            {% if field.change_codename %}
+                            <input id="id_{{ field.change_codename }}"
+                                {% if not request.user.is_superuser %}disabled{% endif %}
+                                name="{{ field.change_codename }}"
+                                aria-label="{{ field.change_codename }}"
+                                type="checkbox"
+                                {% if user|user_has_configuration_permission_without_group:field.change_codename %}checked{% endif %} />
+                            {% endif %}
+                        </td>
+                        <td class="centered">
+                            {% if field.delete_codename %}
+                            <input id="id_{{ field.delete_codename }}"
+                                {% if not request.user.is_superuser %}disabled{% endif %}
+                                name="{{ field.delete_codename }}"
+                                aria-label="{{ field.delete_codename }}"
+                                type="checkbox"
+                                {% if user|user_has_configuration_permission_without_group:field.delete_codename %}checked{% endif %} />
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+            </form>
+        </div>
+        {% endif %}
+        <!-- End Configuration Permissions -->
     </div>
 </div>
+{% endblock %}
+{% block postscript %}
+{{ block.super }}
+<script type="text/javascript">
+
+    $(function() {
+        $('div#edit_permissions input[type=checkbox]').on('click', function() {
+            $('#saving_permissions').append(' <small>(saving...)</small>')
+            $('#edit_permissions_form').submit()
+        });
+    });
+
+</script>
 {% endblock %}

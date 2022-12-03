@@ -216,7 +216,7 @@ The deduplication part of this command will run the deduplication for each findi
 run the deduplication in the foreground process, use:
 
 {{< highlight bash >}}
-docker-compose exec uwsgi ./manage.py dedupe --dedupe-sync
+docker-compose exec uwsgi ./manage.py dedupe --dedupe_sync
 {{< / highlight >}}
 
 Please note the deduplication process is resource intensive and can take a long time to complete
@@ -284,24 +284,19 @@ days teams have to remediate a finding.
 
 ### SLA notification configuration
 
-There are 5 variables in the settings.py file that you can configure, to
-act on the global behavior. By default, any findings across the instance
-that are in `Active, Verified` state will be considered for
-notifications.
+There are 3 variables in the system settings that can be set for notifcations of SLA breaches.
+By default notifications are disabled.
+You can either choose to notify about breaches for findings that are only in 'Active' or
+for any findings across the instance that are in `Active, Verified`.
+Furthermore, it is possible choose to only consider findings that have a JIRA issue linked to them.
+
+There are 2 variables in the settings.py file that you can configure, to
+act on the global behavior.
 
 {{< highlight python >}}
-SLA_NOTIFY_ACTIVE = False
-SLA_NOTIFY_ACTIVE_VERIFIED_ONLY = True
-SLA_NOTIFY_WITH_JIRA_ONLY = False
 SLA_NOTIFY_PRE_BREACH = 3
 SLA_NOTIFY_POST_BREACH = 7
 {{< / highlight >}}
-
-Setting both `SLA_NOTIFY_ACTIVE` and `SLA_NOTIFY_ACTIVE_VERIFIED_ONLY`
-to `False` will effectively disable SLA notifications.
-
-You can choose to only consider findings that have a JIRA issue linked
-to them. If so, please set `SLA_NOTIFY_WITH_JIRA_ONLY` to `True`.
 
 The `SLA_NOTIFY_PRE_BREACH` is expressed in days. Whenever a finding\'s
 \"SLA countdown\" (time to remediate) drops to this number, a
@@ -368,9 +363,11 @@ $ docker-compose exec uwsgi /bin/bash -c 'python manage.py sla_notifications'
 
 ## Reports
 
+### Instant reports
+
 ![Report Listing](../../images/report_1.png)
 
-Reports can be generated for:
+Instant reports can be generated for:
 
 1.  Product types
 2.  Products
@@ -378,11 +375,12 @@ Reports can be generated for:
 4.  Tests
 5.  List of Findings
 6.  Endpoints
-7.  Custom reports
-
-![Report Generation](../../images/report_2.png)
 
 Filtering is available on all report generation views to aid in focusing the report for the appropriate need.
+
+### Custom reports
+
+![Report Generation](../../images/report_2.png)
 
 Custom reports, generated with the Report Builder, allow you to select specific components to be added to the report. These include:
 
@@ -452,12 +450,19 @@ Active
 :   Designates whether this user should be treated as active and can login to DefectDojo.
     Unselect this instead of deleting accounts.
 
-Staff status
-:   Staff users have some more permissions than non-staff users, see [System wide permissions]({{< ref "permissions#system-wide-permissions" >}})
-
 Superuser status
 :   Designates that this user can configure the system and has all permissions
     for objects without explicitly assigning them.
+
+A superuser may force a password reset for any user at any given time. This
+can be set when creating a new user, or when editing an existing one, requiring
+the user to change their password upon their next login.
+
+DefectDojo enforces the following password rules for all users:
+*   Must meet a length requirement of 9 characters
+*   Must be unique (not commonly used)
+*   Must contain one of each of the following: a number (0-9), uppercase letter
+    (A-Z), lowercase letter (a-z), and symbol ()[]{}|\~!@#$%^&*_-+=;:`'",<>./?
 
 ## Calendar
 
@@ -495,3 +500,37 @@ enabled benchmarks for that AVSV level.
 
 Additional benchmarks can be added/updated in the Django admin site. In
 a future release this will be brought out to the UI.
+
+## Endpoint Meta Importer
+
+For heavy infrastructure scanning organizations, endpoints need to be as 
+flexible as possible to get the most of DefectDojo. This flexibility comes
+in the form of Tags and custom fields. Tags allow users to filter, sort, and
+report objects in ways the base object is not totally proficient in doing.
+
+Endpoint Meta Importer provides a means to apply arbitrary tags and custom fields to 
+endpoints in mass via a CSV file. Tags and customs fields are stored in the
+format of column:row.
+
+Here is a very simple example with only two columns:
+
+```
+hostname                     | team                | public_facing
+------------------------------------------------------------------
+sheets.google.com            | data analytics      | yes
+docs.google.com              | language processing | yes
+feedback.internal.google.com | human resources     | no
+```
+
+The three endpoints hosts will be used to find existing endpoints with matching hosts,
+or create new endpoints, and then apply meta as follows:
+
+```
+sheets.google.com (endpoint) -> [ team:data analytics, public_facing:yes ] (tags)
+docs.google.com (endpoint) -> [ team:language processing, public_facing:yes ] (tags)
+feedback.internal.google.com (endpoint) -> [ team:human resources, public_facing:no ] (tags)
+```
+
+Endpoint Meta Importer can be found in the Endpoint tab when viewing a Product
+
+**Note:** The field "hostname" is required as it is used to query/create endpoints.

@@ -18,7 +18,7 @@ class AnchoreEngineParser(object):
         data = json.load(filename)
         dupes = dict()
         for item in data['vulnerabilities']:
-            cve = item.get('vuln')
+            vulnerability_id = item.get('vuln')
 
             title = item['vuln'] + ' - ' + item['package'] + '(' + item['package_type'] + ')'
 
@@ -29,7 +29,6 @@ class AnchoreEngineParser(object):
             findingdetail += '**Package path**: ' + item['package_path'] + '\n\n'
             findingdetail += '**Package type**: ' + item['package_type'] + '\n\n'
             findingdetail += '**Feed**: ' + item['feed'] + '/' + item['feed_group'] + '\n\n'
-            findingdetail += '**CVE**: ' + cve + '\n\n'
             findingdetail += '**CPE**: ' + item['package_cpe'] + '\n\n'
             findingdetail += '**Description**: ' + item.get('description', '<None>') + '\n\n'
 
@@ -80,7 +79,6 @@ class AnchoreEngineParser(object):
                 find = Finding(
                     title=title,
                     test=test,
-                    cve=cve,
                     cvssv3_score=cvssv3_base_score,
                     description=findingdetail,
                     severity=sev,
@@ -94,7 +92,8 @@ class AnchoreEngineParser(object):
                     dynamic_finding=False,
                     vuln_id_from_tool=item.get('vuln'),
                 )
-
+                if vulnerability_id:
+                    find.unsaved_vulnerability_ids = [vulnerability_id]
                 dupes[dupe_key] = find
 
         return list(dupes.values())

@@ -52,14 +52,14 @@ a {
 .panel-default .btn-primary {
     background-color: transparent!important;
     border-style: none!important;
-    color: #546474!important;
-    border: 1px solid #546474!important;
+    color: #fff!important;
+    border: 1px solid #fff!important;
 }
 
 .panel-default .btn-primary:hover {
     background-color: transparent!important;
-    color: #36404a!important;
-    border: 1px solid #546474!important;
+    color: #fff!important;
+    border: 1px solid #fff!important;
 }
 
 .btn-primary {
@@ -71,6 +71,18 @@ a {
 .btn-primary:hover {
     background-color: #38434d!important;
 }
+
+.btn-secondary {
+    color: #fff;
+    background-color: #546474;
+	border-style: none!important;
+}
+
+.btn-secondary:hover {
+    color: #fff;
+    background-color: #38434d!important;
+}
+
 /*
 .btn-primary.active.focus, .btn-primary.active:focus, .btn-primary.active:hover, .btn-primary:active.focus, .btn-primary:active:focus, .btn-primary:active:hover, .open > .dropdown-toggle.btn-primary.focus, .open > .dropdown-toggle.btn-primary:focus, .open > .dropdown-toggle.btn-primary:hover {
     background-color: transparent!important;
@@ -179,7 +191,11 @@ input[type="file"] {
 }
 
 .form-control {
-    width: 70%;
+    width: 70% !important;
+}
+
+.bs-searchbox .form-control {
+    width: 100% !important;
 }
 
 .dojo-input-group {
@@ -308,6 +324,21 @@ form.metric_form p label {
 
 .filters .panel-heading:first-child {
     border-top: 0px solid #ddd;
+}
+
+.panel-blue .panel-heading,
+.panel-blue {
+    color: #f5f5f5;
+    background-color: #546474!important;
+    border-color: #546474!important;
+}
+
+.panel-blue a {
+    color: #546474;
+}
+
+.panel-blue a:hover {
+    color: #38434d;
 }
 
 .nowrap {
@@ -568,13 +599,18 @@ form ul#id_accepted_findings input {
 }
 
 .pagination {
-    margin: 10px 0 15px;
+    margin: 10px;
 }
 
 .pagination>.active>a, .pagination>.active>a:focus, .pagination>.active>a:hover, .pagination>.active>span, .pagination>.active>span:focus, .pagination>.active>span:hover
 {
   background-color: #546474;
   border-color: #546474;
+}
+
+.pagination-in-panel {
+    margin-left: 10px!important;
+    margin-right: 10px!important;
 }
 
 #risk_acceptance table form {
@@ -648,7 +684,20 @@ div.page_select {
 }
 
 input#simple_search {
+    width: 100%!important;
+}
+
+.dojo-modals-wrapper {
+    display: none;
+    flex-direction: column;
+    position: fixed;
+    z-index: 1;
+    padding-top: 100px;
+    left: 0;
+    top: 0;
     width: 100%;
+    height: 100%;
+    overflow: auto;
 }
 
 .footer {
@@ -714,6 +763,11 @@ body #header form#api_selector .input a#explore {
 .controls ul {
     list-style-type: none;
     margin: 0
+}
+
+div.dataTables_wrapper
+div.dataTables_filter {
+    margin: 10px!important;
 }
 
 .navbar li.search-form {
@@ -979,16 +1033,28 @@ div.custom-search-form {
     #page-wrapper {
         margin: 75px 0 0 0;
     }
+
+    #footer-wrapper {
+        margin: 75px 0 0 0;
+    }
 }
 
 @media (min-width: 359px) {
     #page-wrapper {
         margin: 100px 0 0 0;
     }
+
+    #footer-wrapper {
+        margin: 100px 0 0 0;
+    }
 }
 
 @media (min-width: 600px) {
     #page-wrapper {
+        margin: 50px 0 0 0;
+    }
+
+    #footer-wrapper {
         margin: 50px 0 0 0;
     }
 }
@@ -1000,6 +1066,11 @@ div.custom-search-form {
 
     #page-wrapper {
         margin: 0 0 0 175px;
+    }
+
+    #footer-wrapper {
+        margin: 0 0 0 175px;
+        border-left: 1px solid #e7e7e7;
     }
 
     li#minimize-menu-li {
@@ -1043,6 +1114,11 @@ div.custom-search-form {
     }
 
     body.min #page-wrapper {
+        margin: 0 0 0 50px;
+        border-left: 1px solid #e7e7e7;
+    }
+
+    body.min #footer-wrapper {
         margin: 0 0 0 50px;
     }
 
@@ -1089,6 +1165,31 @@ div.custom-search-form {
     margin-right: 25px;
 }
 
+.dojo-filter-set.form-inline .filter-form-group {
+    display: flex;
+    flex-wrap: wrap;
+    flex-basis: auto;
+    flex-grow: 4;
+    align-content: stretch;
+    margin-bottom: 10px;
+    vertical-align: middle;
+    margin-right: 25px;
+}
+
+.dojo-filter-set.form-inline .filter-form-input {
+    margin-right: 25px;
+    margin-bottom: 10px;
+}
+
+.dojo-filter-set.form-inline .filter-form-control {
+    width: auto!important;
+    vertical-align: middle;
+}
+
+.dojo-filter-set.form-inline .form-control {
+    height: auto!important;
+}
+
 .report-filter-set {
     padding-left: 10px;
 }
@@ -1109,6 +1210,18 @@ div.custom-search-form {
 }
 
 #the-filters {
+    background-color: #f9f9f9;
+}
+
+#the-filters-open {
+    background-color: #f9f9f9;
+}
+
+#the-filters-paused {
+    background-color: #f9f9f9;
+}
+
+#the-filters-closed {
     background-color: #f9f9f9;
 }
 
@@ -1196,6 +1309,10 @@ div.custom-search-form {
 	color: #246c91;
 }
 
+div.dt-buttons {
+    margin: 10px!important;
+}
+
 table#product_types .btn-success{
 	background-color: #546474;
 	border-color: #546474;
@@ -1218,10 +1335,6 @@ table#product_types .btn-warning:hover{
 
 span.pull-right.clickable i.glyphicon-chevron-up, span.pull-right.clickable i.glyphicon-chevron-down {
     color: #546474;
-}
-
-table.finding-endpoints {
-    font-size: 13px;
 }
 
 .finding-description {
@@ -1521,12 +1634,6 @@ div.tags .label {
 .tag-label:visited {
     color: white;
     text-decoration: none;
-}
-
-@media (min-width: 768px) {
-    #findingImageModal .modal-dialog {
-        width: 50%;
-    }
 }
 
 #finding_pic, .modal_finding_pic:hover {

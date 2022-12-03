@@ -1,6 +1,5 @@
 import logging
 import re
-from urllib.parse import urlparse
 
 from lxml import etree
 
@@ -169,6 +168,9 @@ class BurpEnterpriseParser(object):
             if details.get('Description') == '':
                 continue
             aggregateKeys = "{}{}{}{}".format(details.get('Title'), details.get('Description'), details.get('CWE'), details.get('Endpoint'))
+            detail_cwe = None
+            if details.get('CWE'):
+                detail_cwe = int(details.get('CWE'))
             find = Finding(title=details.get('Title'),
                            description=details.get('Description'),
                            test=test,
@@ -176,7 +178,7 @@ class BurpEnterpriseParser(object):
                            mitigation=details.get('Mitigation'),
                            references=details.get('References'),
                            impact=details.get('Impact'),
-                           cwe=int(details.get('CWE')),
+                           cwe=detail_cwe,
                            false_p=False,
                            duplicate=False,
                            out_of_scope=False,
@@ -197,22 +199,6 @@ class BurpEnterpriseParser(object):
             dupes[aggregateKeys] = find
 
             for url in details.get('Endpoint'):
-                parsedUrl = urlparse(url)
-                protocol = parsedUrl.scheme
-                query = parsedUrl.query
-                fragment = parsedUrl.fragment
-                path = parsedUrl.path
-                port = ""  # Set port to empty string by default
-                # Split the returned network address into host and
-                try:  # If there is port number attached to host address
-                    host, port = parsedUrl.netloc.split(':')
-                except:  # there's no port attached to address
-                    host = parsedUrl.netloc
-
-                find.unsaved_endpoints.append(Endpoint(
-                        host=host, port=port,
-                        path=path,
-                        protocol=protocol,
-                        query=query, fragment=fragment))
+                find.unsaved_endpoints.append(Endpoint.from_uri(url))
 
         return list(dupes.values())

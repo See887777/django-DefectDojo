@@ -1,27 +1,37 @@
+
 # code: language=Dockerfile
 
 # The code for the build image should be identical with the code in
 # Dockerfile.django to use the caching mechanism of Docker.
 
-FROM python:3.8.9-slim-buster@sha256:5d9e29ce2be0f6b0939691ac1331c4a42a2678d13c918a8eba00698449209ef1 as build
+# Ref: https://devguide.python.org/#branchstatus
+FROM python:3.11.0-slim-bullseye@sha256:1cd45c5dad845af18d71745c017325725dc979571c1bbe625b67e6051533716c as base
+FROM base as build
 WORKDIR /app
 RUN \
   apt-get -y update && \
-  apt-get -y install \
+  apt-get -y install --no-install-recommends \
+    gcc \
     build-essential \
     dnsutils \
     default-mysql-client \
     libmariadb-dev-compat \
+    libpq-dev \
     postgresql-client \
     xmlsec1 \
     git \
     uuid-runtime \
+    # libcurl4-openssl-dev is required for installing pycurl python package
+    libcurl4-openssl-dev \
     && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists && \
   true
 COPY requirements.txt ./
-RUN pip3 wheel --wheel-dir=/tmp/wheels -r ./requirements.txt
+# CPUCOUNT=1 is needed, otherwise the wheel for uwsgi won't always be build succesfully
+# https://github.com/unbit/uwsgi/issues/1318#issuecomment-542238096
+RUN CPUCOUNT=1 pip3 wheel --wheel-dir=/tmp/wheels -r ./requirements.txt
+
 
 FROM build AS collectstatic
 
@@ -32,17 +42,17 @@ ENV \
   node="nodejs"
 RUN \
   apt-get -y update && \
-  apt-get -y install apt-transport-https ca-certificates curl wget && \
+  apt-get -y install --no-install-recommends apt-transport-https ca-certificates curl wget gnupg && \
   curl -sSL https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add --no-tty - && \
-  echo 'deb https://deb.nodesource.com/node_14.x buster main' > /etc/apt/sources.list.d/nodesource.list && \
-  echo 'deb-src https://deb.nodesource.com/node_14.x buster main' >> /etc/apt/sources.list.d/nodesource.list && \
+  echo 'deb https://deb.nodesource.com/node_14.x bullseye main' > /etc/apt/sources.list.d/nodesource.list && \
+  echo 'deb-src https://deb.nodesource.com/node_14.x bullseye main' >> /etc/apt/sources.list.d/nodesource.list && \
   apt-get update -y -o Dir::Etc::sourcelist="sources.list.d/nodesource.list" \
   -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" && \
   curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
   wget https://github.com/yarnpkg/yarn/releases/download/v1.22.10/yarn_1.22.10_all.deb && \
   dpkg -i yarn_1.22.10_all.deb && \
   echo "$(yarn --version)" && \
-  apt-get -y install nodejs && \
+  apt-get -y install --no-install-recommends nodejs && \
   echo "$(node --version)" && \
   apt-get clean && \
   rm yarn_1.22.10_all.deb && \
@@ -65,7 +75,7 @@ COPY dojo/ ./dojo/
 
 RUN env DD_SECRET_KEY='.' python3 manage.py collectstatic --noinput && true
 
-FROM nginx:1.19.10-alpine@sha256:07ab71a2c8e4ecb19a5a5abcfb3a4f175946c001c8af288b1aa766d67b0d05d2
+FROM nginx:1.23.2-alpine@sha256:455c39afebd4d98ef26dd70284aa86e6810b0485af5f4f222b19b89758cabf1e
 ARG uid=1001
 ARG appuser=defectdojo
 COPY --from=collectstatic /app/static/ /usr/share/nginx/html/static/

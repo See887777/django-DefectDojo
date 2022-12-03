@@ -53,7 +53,7 @@ class NmapParser(object):
 
             for port_element in host.findall("ports/port"):
                 protocol = port_element.attrib['protocol']
-                endpoint = Endpoint(host=ip, fqdn=fqdn, protocol=protocol)
+                endpoint = Endpoint(host=fqdn if fqdn else ip, protocol=protocol)
                 if 'portid' in port_element.attrib and port_element.attrib['portid'].isdigit():
                     endpoint.port = int(port_element.attrib['portid'])
 
@@ -155,7 +155,7 @@ class NmapParser(object):
 
                 # manage if CVE is in metadata
                 if "type" in vuln_attributes and "cve" == vuln_attributes["type"]:
-                    finding.cve = vuln_attributes["id"]
+                    finding.unsaved_vulnerability_ids = [vuln_attributes["id"]]
 
                 if report_date:
                     finding.date = report_date

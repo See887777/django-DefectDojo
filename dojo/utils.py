@@ -1,8 +1,12 @@
+from dojo.authorization.roles_permissions import Permissions
+from dojo.finding.queries import get_authorized_findings
 import re
 import binascii
 import os
 import hashlib
 import bleach
+import mimetypes
+import hyperlink
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from calendar import monthrange
@@ -22,8 +26,8 @@ from django.db.models.query import QuerySet
 import calendar as tcalendar
 from dojo.github import add_external_issue_github, update_external_issue_github, close_external_issue_github, reopen_external_issue_github
 from dojo.models import Finding, Engagement, Finding_Group, Finding_Template, Product, \
-    Dojo_User, Test, User, System_Settings, Notifications, Endpoint, Benchmark_Type, \
-    Language_Type, Languages, Rule
+    Test, User, Dojo_User, System_Settings, Notifications, Endpoint, Benchmark_Type, \
+    Language_Type, Languages, Rule, Dojo_Group_Member, NOTIFICATION_CHOICES
 from asteval import Interpreter
 from dojo.notifications.helper import create_notification
 import logging
@@ -33,6 +37,7 @@ from django.http import HttpResponseRedirect
 import crum
 from dojo.celery import app
 from dojo.decorators import dojo_async_task, dojo_model_from_id, dojo_model_to_id
+from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 
 
 logger = logging.getLogger(__name__)
@@ -89,12 +94,77 @@ def do_false_positive_history(new_finding, *args, **kwargs):
         new_finding.false_p = True
         new_finding.active = False
         new_finding.verified = True
+        # Remove the async user kwarg because save() really does not like it
+        # Would rather not add anything to Finding.save()
+        kwargs.pop('async_user')
         super(Finding, new_finding).save(*args, **kwargs)
 
 
 # true if both findings are on an engagement that have a different "deduplication on engagement" configuration
 def is_deduplication_on_engagement_mismatch(new_finding, to_duplicate_finding):
     return not new_finding.test.engagement.deduplication_on_engagement and to_duplicate_finding.test.engagement.deduplication_on_engagement
+
+
+def get_endpoints_as_url(finding):
+    list1 = []
+    for e in finding.endpoints.all():
+        list1.append(hyperlink.parse(str(e)))
+    return list1
+
+
+def are_urls_equal(url1, url2, fields):
+    # Possible values are: scheme, host, port, path, query, fragment, userinfo, and user.
+    # For a details description see https://hyperlink.readthedocs.io/en/latest/api.html#attributes
+    deduplicationLogger.debug("Check if url %s and url %s are equal in terms of %s.", url1, url2, fields)
+    for field in fields:
+        if field == 'scheme':
+            if url1.scheme != url2.scheme:
+                return False
+        elif field == 'host':
+            if url1.host != url2.host:
+                return False
+        elif field == 'port':
+            if url1.port != url2.port:
+                return False
+        elif field == 'path':
+            if url1.path != url2.path:
+                return False
+        elif field == 'query':
+            if url1.query != url2.query:
+                return False
+        elif field == 'fragment':
+            if url1.fragment != url2.fragment:
+                return False
+        elif field == 'userinfo':
+            if url1.userinfo != url2.userinfo:
+                return False
+        elif field == 'user':
+            if url1.user != url2.user:
+                return False
+        else:
+            logger.warning('Field ' + field + ' is not supported by the endpoint dedupe algorithm, ignoring it.')
+    return True
+
+
+def are_endpoints_duplicates(new_finding, to_duplicate_finding):
+    fields = settings.DEDUPE_ALGO_ENDPOINT_FIELDS
+    # shortcut if fields list is empty/feature is disabled
+    if len(fields) == 0:
+        deduplicationLogger.debug("deduplication by endpoint fields is disabled")
+        return True
+
+    list1 = get_endpoints_as_url(new_finding)
+    list2 = get_endpoints_as_url(to_duplicate_finding)
+
+    deduplicationLogger.debug("Starting deduplication by endpoint fields for finding {} with urls {} and finding {} with urls {}".format(new_finding.id, list1, to_duplicate_finding.id, list2))
+    if list1 == [] and list2 == []:
+        return True
+
+    for l1 in list1:
+        for l2 in list2:
+            if are_urls_equal(l1, l2, fields):
+                return True
+    return False
 
 
 @dojo_model_to_id
@@ -114,26 +184,14 @@ def do_dedupe_finding(new_finding, *args, **kwargs):
     if enabled:
         deduplicationLogger.debug('dedupe for: ' + str(new_finding.id) +
                     ":" + str(new_finding.title))
-        # TODO use test.dedupe_algo and case statement
-        if hasattr(settings, 'DEDUPLICATION_ALGORITHM_PER_PARSER'):
-            scan_type = new_finding.test.test_type.name
-            deduplicationLogger.debug('scan_type for this finding is :' + scan_type)
-            # Default algorithm
-            deduplicationAlgorithm = settings.DEDUPE_ALGO_LEGACY
-            # Check for an override for this scan_type in the deduplication configuration
-            if (scan_type in settings.DEDUPLICATION_ALGORITHM_PER_PARSER):
-                deduplicationAlgorithm = settings.DEDUPLICATION_ALGORITHM_PER_PARSER[scan_type]
-            deduplicationLogger.debug('deduplication algorithm: ' + deduplicationAlgorithm)
-            if(deduplicationAlgorithm == settings.DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL):
-                deduplicate_unique_id_from_tool(new_finding)
-            elif(deduplicationAlgorithm == settings.DEDUPE_ALGO_HASH_CODE):
-                deduplicate_hash_code(new_finding)
-            elif(deduplicationAlgorithm == settings.DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE):
-                deduplicate_uid_or_hash_code(new_finding)
-            else:
-                logger.debug('dedupe legacy start')
-                deduplicate_legacy(new_finding)
-                logger.debug('dedupe legacy start.done.')
+        deduplicationAlgorithm = new_finding.test.deduplication_algorithm
+        deduplicationLogger.debug('deduplication algorithm: ' + deduplicationAlgorithm)
+        if deduplicationAlgorithm == settings.DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL:
+            deduplicate_unique_id_from_tool(new_finding)
+        elif deduplicationAlgorithm == settings.DEDUPE_ALGO_HASH_CODE:
+            deduplicate_hash_code(new_finding)
+        elif deduplicationAlgorithm == settings.DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE:
+            deduplicate_uid_or_hash_code(new_finding)
         else:
             deduplicationLogger.debug("no configuration per parser found; using legacy algorithm")
             deduplicate_legacy(new_finding)
@@ -187,8 +245,8 @@ def deduplicate_legacy(new_finding):
         # ---------------------------------------------------------
 
         if find.endpoints.count() != 0 and new_finding.endpoints.count() != 0:
-            list1 = [e.host_with_port for e in new_finding.endpoints.all()]
-            list2 = [e.host_with_port for e in find.endpoints.all()]
+            list1 = [str(e) for e in new_finding.endpoints.all()]
+            list2 = [str(e) for e in find.endpoints.all()]
 
             if all(x in list1 for x in list2):
                 deduplicationLogger.debug("%s: existing endpoints are present in new finding", find.id)
@@ -256,10 +314,10 @@ def deduplicate_unique_id_from_tool(new_finding):
             continue
         try:
             set_duplicate(new_finding, find)
+            break
         except Exception as e:
             deduplicationLogger.debug(str(e))
             continue
-        break
 
 
 def deduplicate_hash_code(new_finding):
@@ -286,11 +344,12 @@ def deduplicate_hash_code(new_finding):
                 'deduplication_on_engagement_mismatch, skipping dedupe.')
             continue
         try:
-            set_duplicate(new_finding, find)
+            if are_endpoints_duplicates(new_finding, find):
+                set_duplicate(new_finding, find)
+                break
         except Exception as e:
             deduplicationLogger.debug(str(e))
             continue
-        break
 
 
 def deduplicate_uid_or_hash_code(new_finding):
@@ -306,7 +365,8 @@ def deduplicate_uid_or_hash_code(new_finding):
         # same without "test__engagement=new_finding.test.engagement" condition
         existing_findings = Finding.objects.filter(
             (Q(hash_code__isnull=False) & Q(hash_code=new_finding.hash_code)) |
-            (Q(unique_id_from_tool__isnull=False) & Q(unique_id_from_tool=new_finding.unique_id_from_tool) & Q(test__test_type=new_finding.test.test_type))).exclude(
+            (Q(unique_id_from_tool__isnull=False) & Q(unique_id_from_tool=new_finding.unique_id_from_tool) & Q(test__test_type=new_finding.test.test_type)),
+            test__engagement__product=new_finding.test.engagement.product).exclude(
                 id=new_finding.id).exclude(
                         duplicate=True).order_by('id')
     deduplicationLogger.debug("Found " +
@@ -317,7 +377,8 @@ def deduplicate_uid_or_hash_code(new_finding):
                 'deduplication_on_engagement_mismatch, skipping dedupe.')
             continue
         try:
-            set_duplicate(new_finding, find)
+            if are_endpoints_duplicates(new_finding, find):
+                set_duplicate(new_finding, find)
         except Exception as e:
             deduplicationLogger.debug(str(e))
             continue
@@ -365,7 +426,7 @@ def set_duplicate_reopen(new_finding, existing_finding):
     existing_finding.active = new_finding.active
     existing_finding.verified = new_finding.verified
     existing_finding.notes.create(author=existing_finding.reporter,
-                                    entry="This finding has been automatically re-openend as it was found in recent scans.")
+                                    entry="This finding has been automatically re-opened as it was found in recent scans.")
     existing_finding.save()
 
 
@@ -845,18 +906,17 @@ def get_period_counts_legacy(findings,
     }
 
 
-def get_period_counts(active_findings,
-                      findings,
+def get_period_counts(findings,
                       findings_closed,
                       accepted_findings,
                       period_interval,
                       start_date,
                       relative_delta='months'):
-    start_date = datetime(
-        start_date.year,
-        start_date.month,
-        start_date.day,
-        tzinfo=timezone.get_current_timezone())
+
+    tz = timezone.get_current_timezone()
+
+    start_date = datetime(start_date.year, start_date.month, start_date.day, tzinfo=tz)
+
     opened_in_period = list()
     active_in_period = list()
     accepted_in_period = list()
@@ -887,77 +947,64 @@ def get_period_counts(active_findings,
                 mitigated_time__range=[new_date, end_date]).count()
 
         if accepted_findings:
+            date_range = [
+                datetime(new_date.year, new_date.month, new_date.day, tzinfo=tz),
+                datetime(end_date.year, end_date.month, end_date.day, tzinfo=tz)
+            ]
             try:
-                risks_a = accepted_findings.filter(
-                    risk_acceptance__created__date__range=[
-                        datetime(
-                            new_date.year,
-                            new_date.month,
-                            1,
-                            tzinfo=timezone.get_current_timezone()),
-                        datetime(
-                            new_date.year,
-                            new_date.month,
-                            monthrange(new_date.year, new_date.month)[1],
-                            tzinfo=timezone.get_current_timezone())
-                    ])
+                risks_a = accepted_findings.filter(risk_acceptance__created__date__range=date_range)
             except:
-                risks_a = accepted_findings.filter(
-                    date__range=[
-                        datetime(
-                            new_date.year,
-                            new_date.month,
-                            1,
-                            tzinfo=timezone.get_current_timezone()),
-                        datetime(
-                            new_date.year,
-                            new_date.month,
-                            monthrange(new_date.year, new_date.month)[1],
-                            tzinfo=timezone.get_current_timezone())
-                    ])
+                risks_a = accepted_findings.filter(date__range=date_range)
         else:
             risks_a = None
 
-        crit_count, high_count, med_count, low_count, closed_count = [
+        f_crit_count, f_high_count, f_med_count, f_low_count, f_closed_count = [
             0, 0, 0, 0, 0
         ]
+        ra_crit_count, ra_high_count, ra_med_count, ra_low_count, ra_closed_count = [
+            0, 0, 0, 0, 0
+        ]
+        active_crit_count, active_high_count, active_med_count, active_low_count, active_closed_count = [
+            0, 0, 0, 0, 0
+        ]
+
         for finding in findings:
             try:
                 severity = finding.severity
+                active = finding.active
+#                risk_accepted = finding.risk_accepted TODO: in future release
             except:
                 severity = finding.finding.severity
-            try:
-                if new_date <= datetime.combine(
-                        finding.date, datetime.min.time()
-                ).replace(tzinfo=timezone.get_current_timezone()) <= end_date:
-                    if severity == 'Critical':
-                        crit_count += 1
-                    elif severity == 'High':
-                        high_count += 1
-                    elif severity == 'Medium':
-                        med_count += 1
-                    elif severity == 'Low':
-                        low_count += 1
-            except:
-                if new_date <= finding.date <= end_date:
-                    if severity == 'Critical':
-                        crit_count += 1
-                    elif severity == 'High':
-                        high_count += 1
-                    elif severity == 'Medium':
-                        med_count += 1
-                    elif severity == 'Low':
-                        low_count += 1
-                pass
+                active = finding.finding.active
+#                risk_accepted = finding.finding.risk_accepted
 
-        total = crit_count + high_count + med_count + low_count
-        opened_in_period.append(
-            [(tcalendar.timegm(new_date.timetuple()) * 1000), new_date,
-             crit_count, high_count, med_count, low_count, total,
-             closed_in_range_count])
-        crit_count, high_count, med_count, low_count, closed_count = [
-            0, 0, 0, 0, 0
-        ]
+            try:
+                f_time = datetime.combine(finding.date, datetime.min.time()).replace(tzinfo=tz)
+            except:
+                f_time = finding.date
+
+            if f_time <= end_date:
+                if severity == 'Critical':
+                    if new_date <= f_time:
+                        f_crit_count += 1
+                    if active:
+                        active_crit_count += 1
+                elif severity == 'High':
+                    if new_date <= f_time:
+                        f_high_count += 1
+                    if active:
+                        active_high_count += 1
+                elif severity == 'Medium':
+                    if new_date <= f_time:
+                        f_med_count += 1
+                    if active:
+                        active_med_count += 1
+                elif severity == 'Low':
+                    if new_date <= f_time:
+                        f_low_count += 1
+                    if active:
+                        active_low_count += 1
+
         if risks_a is not None:
             for finding in risks_a:
                 try:
@@ -965,52 +1012,29 @@ def get_period_counts(active_findings,
                 except:
                     severity = finding.finding.severity
                 if severity == 'Critical':
-                    crit_count += 1
+                    ra_crit_count += 1
                 elif severity == 'High':
-                    high_count += 1
+                    ra_high_count += 1
                 elif severity == 'Medium':
-                    med_count += 1
+                    ra_med_count += 1
                 elif severity == 'Low':
-                    low_count += 1
+                    ra_low_count += 1
 
-        total = crit_count + high_count + med_count + low_count
+        total = f_crit_count + f_high_count + f_med_count + f_low_count
+        opened_in_period.append(
+            [(tcalendar.timegm(new_date.timetuple()) * 1000), new_date,
+             f_crit_count, f_high_count, f_med_count, f_low_count, total,
+             closed_in_range_count])
+
+        total = ra_crit_count + ra_high_count + ra_med_count + ra_low_count
         accepted_in_period.append(
             [(tcalendar.timegm(new_date.timetuple()) * 1000), new_date,
-             crit_count, high_count, med_count, low_count, total])
-        crit_count, high_count, med_count, low_count, closed_count = [
-            0, 0, 0, 0, 0
-        ]
-        for finding in active_findings:
-            try:
-                severity = finding.severity
-            except:
-                severity = finding.finding.severity
-            try:
-                if datetime.combine(finding.date, datetime.min.time()).replace(
-                        tzinfo=timezone.get_current_timezone()) <= end_date:
-                    if severity == 'Critical':
-                        crit_count += 1
-                    elif severity == 'High':
-                        high_count += 1
-                    elif severity == 'Medium':
-                        med_count += 1
-                    elif severity == 'Low':
-                        low_count += 1
-            except:
-                if finding.date <= end_date:
-                    if severity == 'Critical':
-                        crit_count += 1
-                    elif severity == 'High':
-                        high_count += 1
-                    elif severity == 'Medium':
-                        med_count += 1
-                    elif severity == 'Low':
-                        low_count += 1
-                pass
-        total = crit_count + high_count + med_count + low_count
+             ra_crit_count, ra_high_count, ra_med_count, ra_low_count, total])
+
+        total = active_crit_count + active_high_count + active_med_count + active_low_count
         active_in_period.append(
             [(tcalendar.timegm(new_date.timetuple()) * 1000), new_date,
-             crit_count, high_count, med_count, low_count, total])
+             active_crit_count, active_high_count, active_med_count, active_low_count, total])
 
     return {
         'opened_per_period': opened_in_period,
@@ -1212,6 +1236,10 @@ def get_page_items_and_count(request, items, page_size, prefix='', do_count=True
 
 def handle_uploaded_threat(f, eng):
     name, extension = os.path.splitext(f.name)
+    # Check if threat folder exist.
+    if not os.path.isdir(settings.MEDIA_ROOT + '/threat/'):
+        # Create the folder
+        os.mkdir(settings.MEDIA_ROOT + '/threat/')
     with open(settings.MEDIA_ROOT + '/threat/%s%s' % (eng.id, extension),
               'wb+') as destination:
         for chunk in f.chunks():
@@ -1236,7 +1264,7 @@ def handle_uploaded_selenium(f, cred):
 @dojo_async_task
 @app.task
 @dojo_model_from_id
-def add_external_issue(find, external_issue_provider):
+def add_external_issue(find, external_issue_provider, **kwargs):
     eng = Engagement.objects.get(test=find.test)
     prod = Product.objects.get(engagement=eng)
     logger.debug('adding external issue with provider: ' + external_issue_provider)
@@ -1249,7 +1277,7 @@ def add_external_issue(find, external_issue_provider):
 @dojo_async_task
 @app.task
 @dojo_model_from_id
-def update_external_issue(find, old_status, external_issue_provider):
+def update_external_issue(find, old_status, external_issue_provider, **kwargs):
     prod = Product.objects.get(engagement=Engagement.objects.get(test=find.test))
     eng = Engagement.objects.get(test=find.test)
 
@@ -1261,7 +1289,7 @@ def update_external_issue(find, old_status, external_issue_provider):
 @dojo_async_task
 @app.task
 @dojo_model_from_id
-def close_external_issue(find, note, external_issue_provider):
+def close_external_issue(find, note, external_issue_provider, **kwargs):
     prod = Product.objects.get(engagement=Engagement.objects.get(test=find.test))
     eng = Engagement.objects.get(test=find.test)
 
@@ -1273,7 +1301,7 @@ def close_external_issue(find, note, external_issue_provider):
 @dojo_async_task
 @app.task
 @dojo_model_from_id
-def reopen_external_issue(find, note, external_issue_provider):
+def reopen_external_issue(find, note, external_issue_provider, **kwargs):
     prod = Product.objects.get(engagement=Engagement.objects.get(test=find.test))
     eng = Engagement.objects.get(test=find.test)
 
@@ -1313,7 +1341,7 @@ def process_notifications(request, note, parent_url, parent_title):
         User.objects.filter(username=username).get()
         for username in usernames_to_check
         if User.objects.filter(is_active=True, username=username).exists()
-    ]  # is_staff also?
+    ]
 
     if len(note.entry) > 200:
         note.entry = note.entry[:200]
@@ -1439,6 +1467,10 @@ def get_system_setting(setting, default=None):
     return getattr(system_settings, setting, (default if default is not None else None))
 
 
+def get_setting(setting):
+    return getattr(settings, setting)
+
+
 @dojo_model_to_id
 @dojo_async_task
 @app.task
@@ -1447,6 +1479,7 @@ def calculate_grade(product, *args, **kwargs):
     system_settings = System_Settings.objects.get()
     if not product:
         logger.warning('ignoring calculate product for product None!')
+        return
 
     if system_settings.enable_product_grade:
         logger.debug('calculating product grade for %s:%s', product.id, product.name)
@@ -1493,8 +1526,8 @@ def get_celery_worker_status():
 
 # Used to display the counts and enabled tabs in the product view
 class Product_Tab():
-    def __init__(self, product_id, title=None, tab=None):
-        self.product = Product.objects.get(id=product_id)
+    def __init__(self, product, title=None, tab=None):
+        self.product = product
         self.title = title
         self.tab = tab
         self.engagement_count = Engagement.objects.filter(
@@ -1507,6 +1540,8 @@ class Product_Tab():
                                                           mitigated__isnull=True).count()
         self.endpoints_count = Endpoint.objects.filter(
             product=self.product).count()
+        self.endpoint_hosts_count = Endpoint.objects.filter(
+            product=self.product).values('host').distinct().count()
         self.benchmark_type = Benchmark_Type.objects.filter(
             enabled=True).order_by('name')
         self.engagement = None
@@ -1541,6 +1576,9 @@ class Product_Tab():
     def endpoints(self):
         return self.endpoints_count
 
+    def endpoint_hosts(self):
+        return self.endpoint_hosts_count
+
     def benchmark_type(self):
         return self.benchmark_type
 
@@ -1563,8 +1601,8 @@ def tab_view_count(product_id):
     return product, engagements, open_findings, endpoints, benchmark_type
 
 
-# Add a lanaguage to product
-def add_language(product, language):
+def add_language(product, language, files=1, code=1):
+    """Add a language to product"""
     prod_language = Languages.objects.filter(
         language__language__iexact=language, product=product)
 
@@ -1574,7 +1612,7 @@ def add_language(product, language):
                 language__iexact=language)
 
             if language_type:
-                lang = Languages(language=language_type, product=product)
+                lang = Languages(language=language_type, product=product, files=files, code=code)
                 lang.save()
         except Language_Type.DoesNotExist:
             pass
@@ -1627,15 +1665,41 @@ def get_site_url():
         return "settings.SITE_URL"
 
 
+@receiver(post_save, sender=User)
 @receiver(post_save, sender=Dojo_User)
-def set_default_notifications(sender, instance, created, **kwargs):
-    # for new user we create a Notifications object so the default 'alert' notifications work
-    # this needs to be a signal to make it also work for users created via ldap, oauth and other authentication backends
+def user_post_save(sender, instance, created, **kwargs):
+    # For new users we create a Notifications object so the default 'alert' notifications work and
+    # assign them to a default group if specified in the system settings.
+    # This needs to be a signal to make it also work for users created via ldap, oauth and other
+    # authentication backends
     if created:
-        logger.info('creating default set of notifications for: ' + str(instance))
-        notifications = Notifications()
-        notifications.user = instance
+        try:
+            notifications = Notifications.objects.get(template=True)
+            notifications.pk = None
+            notifications.template = False
+            notifications.user = instance
+            logger.info('creating default set (from template) of notifications for: ' + str(instance))
+        except Exception as err:
+            notifications = Notifications(user=instance)
+            logger.info('creating default set of notifications for: ' + str(instance))
+
         notifications.save()
+
+        system_settings = System_Settings.objects.get()
+        if system_settings.default_group and system_settings.default_group_role:
+            if (system_settings.default_group_email_pattern and re.fullmatch(system_settings.default_group_email_pattern, instance.email)) or \
+               not system_settings.default_group_email_pattern:
+                logger.info('setting default group for: ' + str(instance))
+                dojo_group_member = Dojo_Group_Member(
+                    group=system_settings.default_group,
+                    user=instance,
+                    role=system_settings.default_group_role)
+                dojo_group_member.save()
+
+    # Superusers shall always be staff
+    if instance.is_superuser and not instance.is_staff:
+        instance.is_staff = True
+        instance.save()
 
 
 @receiver(post_save, sender=Engagement)
@@ -1733,6 +1797,7 @@ def sla_compute_and_notify(*args, **kwargs):
             event='sla_breach',
             title=title,
             finding=finding,
+            url=reverse('view_finding', args=(finding.id,)),
             sla_age=sla_age
         )
 
@@ -1741,33 +1806,33 @@ def sla_compute_and_notify(*args, **kwargs):
             jira_helper.add_simple_jira_comment(jira_instance, jira_issue, title)
 
     # exit early on flags
-    if not settings.SLA_NOTIFY_ACTIVE and not settings.SLA_NOTIFY_ACTIVE_VERIFIED_ONLY:
+    system_settings = System_Settings.objects.get()
+    if not system_settings.enable_notify_sla_active and not system_settings.enable_notify_sla_active_verified:
         logger.info("Will not notify on SLA breach per user configured settings")
         return
 
     jira_issue = None
     jira_instance = None
     try:
-        system_settings = System_Settings.objects.get()
         if system_settings.enable_finding_sla:
             logger.info("About to process findings for SLA notifications.")
             logger.debug("Active {}, Verified {}, Has JIRA {}, pre-breach {}, post-breach {}".format(
-                settings.SLA_NOTIFY_ACTIVE,
-                settings.SLA_NOTIFY_ACTIVE_VERIFIED_ONLY,
-                settings.SLA_NOTIFY_WITH_JIRA_ONLY,
+                system_settings.enable_notify_sla_active,
+                system_settings.enable_notify_sla_active_verified,
+                system_settings.enable_notify_sla_jira_only,
                 settings.SLA_NOTIFY_PRE_BREACH,
                 settings.SLA_NOTIFY_POST_BREACH,
             ))
 
             query = None
-            if settings.SLA_NOTIFY_ACTIVE:
+            if system_settings.enable_notify_sla_active:
                 query = Q(active=True, is_mitigated=False, duplicate=False)
-            if settings.SLA_NOTIFY_ACTIVE_VERIFIED_ONLY:
+            if system_settings.enable_notify_sla_active_verified:
                 query = Q(active=True, verified=True, is_mitigated=False, duplicate=False)
             logger.debug("My query: {}".format(query))
 
             no_jira_findings = {}
-            if settings.SLA_NOTIFY_WITH_JIRA_ONLY:
+            if system_settings.enable_notify_sla_jira_only:
                 logger.debug("Ignoring findings that are not linked to a JIRA issue")
                 no_jira_findings = Finding.objects.exclude(jira_issue__isnull=False)
 
@@ -1804,7 +1869,7 @@ def sla_compute_and_notify(*args, **kwargs):
                 jira_issue = None
                 if finding.has_jira_issue:
                     jira_issue = finding.jira_issue
-                elif finding.grouped:
+                elif finding.has_finding_group:
                     jira_issue = finding.finding_group.jira_issue
 
                 if jira_issue:
@@ -1859,11 +1924,21 @@ def sla_compute_and_notify(*args, **kwargs):
         logger.info("Findings SLA is not enabled.")
 
 
-def get_words_for_field(queryset, fieldname):
+def get_words_for_field(model, fieldname):
     max_results = getattr(settings, 'MAX_AUTOCOMPLETE_WORDS', 20000)
-    words = [
-        word for component_name in queryset.order_by().filter(**{'%s__isnull' % fieldname: False}).values_list(fieldname, flat=True).distinct()[:max_results] for word in (component_name.split() if component_name else []) if len(word) > 2
-    ]
+    models = None
+    if model == Finding:
+        models = get_authorized_findings(Permissions.Finding_View, user=get_current_user())
+    elif model == Finding_Template:
+        models = Finding_Template.objects.all()
+
+    if models is not None:
+        words = [
+            word for field_value in models.order_by().filter(**{'%s__isnull' % fieldname: False}).values_list(fieldname, flat=True).distinct()[:max_results] for word in (field_value.split() if field_value else []) if len(word) > 2
+        ]
+    else:
+        words = []
+
     return sorted(set(words))
 
 
@@ -1908,6 +1983,34 @@ def get_object_or_none(klass, *args, **kwargs):
         )
     try:
         return queryset.get(*args, **kwargs)
+    except queryset.model.DoesNotExist:
+        return None
+
+
+def get_last_object_or_none(klass, *args, **kwargs):
+    """
+    Use last() to return an object, or return None
+    does not exist.
+    klass may be a Model, Manager, or QuerySet object. All other passed
+    arguments and keyword arguments are used in the get() query.
+    Like with QuerySet.get(), MultipleObjectsReturned is raised if more than
+    one object is found.
+    """
+    queryset = klass
+
+    if hasattr(klass, '_default_manager'):
+        queryset = klass._default_manager.all()
+
+    if not hasattr(queryset, 'get'):
+        klass__name = klass.__name__ if isinstance(klass, type) else klass.__class__.__name__
+        raise ValueError(
+            "First argument to get_last_object_or_None() must be a Model, Manager, "
+            "or QuerySet, not '%s'." % klass__name
+        )
+    try:
+        results = queryset.filter(*args, **kwargs).order_by('id')
+        logger.debug('last_object_or_none: %s', results.query)
+        return results.last()
     except queryset.model.DoesNotExist:
         return None
 
@@ -1965,7 +2068,7 @@ def mass_model_updater(model_type, models, function, fields, page_size=1000, ord
     batch = []
     total_pages = (total_count // page_size) + 2
     # logger.info('pages to process: %d', total_pages)
-    logger.info('%s%s out of %s models processed ...', log_prefix, i, total_count)
+    logger.debug('%s%s out of %s models processed ...', log_prefix, i, total_count)
     for p in range(1, total_pages):
         # logger.info('page: %d', p)
         if order == 'asc':
@@ -1989,7 +2092,9 @@ def mass_model_updater(model_type, models, function, fields, page_size=1000, ord
                 if fields:
                     model_type.objects.bulk_update(batch, fields)
                 batch = []
-                logger.info('%s%s out of %s models processed ...', log_prefix, i, total_count)
+                logger.debug('%s%s out of %s models processed ...', log_prefix, i, total_count)
+
+        logger.info('%s%s out of %s models processed ...', log_prefix, i, total_count)
 
     if fields:
         model_type.objects.bulk_update(batch, fields)
@@ -2025,3 +2130,169 @@ def prod_name(obj):
         return 'Unknown'
 
     return get_product(obj).name
+
+
+# Returns image locations by default (i.e. uploaded_files/09577eb1-6ccb-430b-bc82-0742d4c97a09.png)
+# if return_objects=True, return the FileUPload object instead of just the file location
+def get_file_images(obj, return_objects=False):
+    logger.debug('getting images for %s:%s', type(obj), obj)
+    files = None
+    if not obj:
+        return files
+    files = obj.files.all()
+
+    images = []
+    for file in files:
+        file_name = file.file.name
+        file_type = mimetypes.guess_type(file_name)[0]
+        if file_type and 'image' in file_type:
+            if return_objects:
+                images.append(file)
+            else:
+                images.append(file_name)
+    return images
+
+
+def get_enabled_notifications_list():
+    # Alerts need to enabled by default
+    enabled = ['alert']
+    for choice in NOTIFICATION_CHOICES:
+        if get_system_setting('enable_{}_notifications'.format(choice[0])):
+            enabled.append(choice[0])
+    return enabled
+
+
+def is_finding_groups_enabled():
+    """Returns true is feature is enabled otherwise false"""
+    return get_system_setting("enable_finding_groups")
+
+
+class async_delete():
+    def __init__(self, *args, **kwargs):
+        self.mapping = {
+            'Product_Type': [
+                (Endpoint, 'product__prod_type'),
+                (Finding, 'test__engagement__product__prod_type'),
+                (Test, 'engagement__product__prod_type'),
+                (Engagement, 'product__prod_type'),
+                (Product, 'prod_type')],
+            'Product': [
+                (Endpoint, 'product'),
+                (Finding, 'test__engagement__product'),
+                (Test, 'engagement__product'),
+                (Engagement, 'product')],
+            'Engagement': [
+                (Finding, 'test__engagement'),
+                (Test, 'engagement')],
+            'Test': [(Finding, 'test')]
+        }
+
+    @dojo_async_task
+    @app.task
+    def delete_chunk(self, objects, **kwargs):
+        for object in objects:
+            try:
+                object.delete()
+            except AssertionError:
+                logger.debug('ASYNC_DELETE: object has already been deleted elsewhere. Skipping')
+                # The id must be None
+                # The object has already been deleted elsewhere
+                pass
+
+    @dojo_async_task
+    @app.task
+    def delete(self, object, **kwargs):
+        logger.debug('ASYNC_DELETE: Deleting ' + self.get_object_name(object) + ': ' + str(object))
+        model_list = self.mapping.get(self.get_object_name(object), None)
+        if model_list:
+            # The object to be deleted was found in the object list
+            self.crawl(object, model_list)
+        else:
+            # The object is not supported in async delete, delete normally
+            logger.debug('ASYNC_DELETE: ' + self.get_object_name(object) + ' async delete not supported. Deleteing normally: ' + str(object))
+            object.delete()
+
+    @dojo_async_task
+    @app.task
+    def crawl(self, object, model_list, **kwargs):
+        logger.debug('ASYNC_DELETE: Crawling ' + self.get_object_name(object) + ': ' + str(object))
+        for model_info in model_list:
+            model = model_info[0]
+            model_query = model_info[1]
+            filter_dict = {model_query: object}
+            objects_to_delete = model.objects.filter(**filter_dict)
+            logger.debug('ASYNC_DELETE: Deleting ' + str(len(objects_to_delete)) + ' ' + self.get_object_name(model) + 's in chunks')
+            chunks = self.chunk_list(model, objects_to_delete)
+            for chunk in chunks:
+                print('deleting', len(chunk), self.get_object_name(model))
+                self.delete_chunk(chunk)
+        self.delete_chunk([object])
+        logger.debug('ASYNC_DELETE: Successfully deleted ' + self.get_object_name(object) + ': ' + str(object))
+
+    def chunk_list(self, model, list):
+        chunk_size = get_setting("ASYNC_OBEJECT_DELETE_CHUNK_SIZE")
+        # Break the list of objects into "chunk_size" lists
+        chunk_list = [list[i:i + chunk_size] for i in range(0, len(list), chunk_size)]
+        logger.debug('ASYNC_DELETE: Split ' + self.get_object_name(model) + ' into ' + str(len(chunk_list)) + ' chunks of ' + str(chunk_size))
+        return chunk_list
+
+    def get_object_name(self, object):
+        if object.__class__.__name__ == 'ModelBase':
+            return object.__name__
+        return object.__class__.__name__
+
+
+@receiver(user_logged_in)
+def log_user_login(sender, request, user, **kwargs):
+    # to cover more complex cases:
+    # http://stackoverflow.com/questions/4581789/how-do-i-get-user-ip-address-in-django
+
+    logger.info('login user: {user} via ip: {ip}'.format(
+        user=user.username,
+        ip=request.META.get('REMOTE_ADDR')
+    ))
+
+
+@receiver(user_logged_out)
+def log_user_logout(sender, request, user, **kwargs):
+
+    logger.info('logout user: {user} via ip: {ip}'.format(
+        user=user.username,
+        ip=request.META.get('REMOTE_ADDR')
+    ))
+
+
+@receiver(user_login_failed)
+def log_user_login_failed(sender, credentials, request, **kwargs):
+
+    if 'username' in credentials:
+        logger.warning('login failed for: {credentials} via ip: {ip}'.format(
+            credentials=credentials['username'],
+            ip=request.META['REMOTE_ADDR']
+        ))
+    else:
+        logger.error('login failed because of missing username via ip: {ip}'.format(
+            ip=request.META['REMOTE_ADDR']
+        ))
+
+
+def get_password_requirements_string():
+    s = 'Password must contain {minimum_length} to {maximum_length} characters'.format(
+        minimum_length=int(get_system_setting('minimum_password_length')),
+        maximum_length=int(get_system_setting('maximum_password_length')))
+
+    if bool(get_system_setting('lowercase_character_required')):
+        s += ', one lowercase letter (a-z)'
+    if bool(get_system_setting('uppercase_character_required')):
+        s += ', one uppercase letter (A-Z)'
+    if bool(get_system_setting('number_character_required')):
+        s += ', one number (0-9)'
+    if bool(get_system_setting('special_character_required')):
+        s += ', one special chacter (()[]{}|\`~!@#$%^&*_-+=;:\'\",<>./?)'  # noqa W605
+
+    if s.count(', ') == 1:
+        password_requirements_string = s.rsplit(', ', 1)[0] + ' and ' + s.rsplit(', ', 1)[1]
+    elif s.count(', ') > 1:
+        password_requirements_string = s.rsplit(', ', 1)[0] + ', and ' + s.rsplit(', ', 1)[1]
+
+    return password_requirements_string + '.'
