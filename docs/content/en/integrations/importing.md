@@ -1,6 +1,6 @@
 ---
 title: "Importing"
-description: "DefectDojo has the ability to import scan reports from a large number of security tools."
+description: "How DefectDojo imports and reimports security tool reports."
 draft: false
 weight: 1
 ---
@@ -37,7 +37,7 @@ Clicking on a reimport changset will show the affected findings, as well as a st
 ![Import History details](../../images/import_history_details1.png)
 
 # API
-This section focuses on Import and Reimport via the API. Please see the [full documentation defails of all API Endpoints](../api-v2-docs/) for more details.
+This section focuses on Import and Reimport via the API. Please see the [full documentation details of all API Endpoints](../api-v2-docs/) for more details.
 Reimport is actually the easiest way to get started as it will create any entities on the fly if needed and it will automatically detect if it is a first time upload or a re-upload.
 
 ## Import
@@ -58,7 +58,7 @@ An import can be performed by specifying the names of these entities in the API 
     "product_type_name": 'Good Products',
     "product_name": 'My little product',
     "engagement_name": 'Important import',
-    "auto_create_contex": True,
+    "auto_create_context": True,
 }
 ```
 
@@ -94,7 +94,7 @@ An reimport can be performed by specifying the names of these entities in the AP
     "product_type_name": 'Good Products',
     "product_name": 'My little product',
     "engagement_name": 'Important import',
-    "auto_create_contex": True,
+    "auto_create_context": True,
 }
 ```
 

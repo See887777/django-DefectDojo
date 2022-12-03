@@ -32,9 +32,17 @@ logger = logging.getLogger(__name__)
 def process_endpoints_view(request, host_view=False, vulnerable=False):
 
     if vulnerable:
-        endpoints = Endpoint.objects.filter(finding__active=True, finding__verified=True, finding__false_p=False,
-                                     finding__duplicate=False, finding__out_of_scope=False)
-        endpoints = endpoints.filter(endpoint_status__mitigated=False)
+        endpoints = Endpoint.objects.filter(
+            finding__active=True,
+            finding__verified=True,
+            finding__out_of_scope=False,
+            finding__mitigated__isnull=True,
+            finding__false_p=False,
+            finding__duplicate=False,
+            status_endpoint__mitigated=False,
+            status_endpoint__false_positive=False,
+            status_endpoint__out_of_scope=False,
+            status_endpoint__risk_accepted=False)
     else:
         endpoints = Endpoint.objects.all()
 
@@ -67,7 +75,7 @@ def process_endpoints_view(request, host_view=False, vulnerable=False):
         if len(p) == 1:
             product = get_object_or_404(Product, id=p[0])
             user_has_permission_or_403(request.user, product, Permissions.Product_View)
-            product_tab = Product_Tab(product.id, view_name, tab="endpoints")
+            product_tab = Product_Tab(product, view_name, tab="endpoints")
 
     return render(
         request, 'dojo/endpoints.html', {
@@ -120,7 +128,7 @@ def process_endpoint_view(request, eid, host_view=False):
     else:
         endpoints = None
         endpoint_metadata = dict(endpoint.endpoint_meta.values_list('name', 'value'))
-        all_findings = endpoint.findings()
+        all_findings = endpoint.findings.all()
         active_findings = endpoint.active_findings()
 
     if all_findings:
@@ -137,7 +145,7 @@ def process_endpoint_view(request, eid, host_view=False):
     # closed_findings is needed as a parameter for get_periods_counts, but they are not relevant in the endpoint view
     closed_findings = Finding.objects.none()
 
-    monthly_counts = get_period_counts(active_findings, all_findings, closed_findings, None, months_between, start_date,
+    monthly_counts = get_period_counts(all_findings, closed_findings, None, months_between, start_date,
                                        relative_delta='months')
 
     paged_findings = get_page_items(request, active_findings, 25)
@@ -147,7 +155,7 @@ def process_endpoint_view(request, eid, host_view=False):
     if active_findings.count() != 0:
         vulnerable = True
 
-    product_tab = Product_Tab(endpoint.product.id, "Host" if host_view else "Endpoint", tab="endpoints")
+    product_tab = Product_Tab(endpoint.product, "Host" if host_view else "Endpoint", tab="endpoints")
     return render(request,
                   "dojo/view_endpoint.html",
                   {"endpoint": endpoint,
@@ -190,7 +198,7 @@ def edit_endpoint(request, eid):
         add_breadcrumb(parent=endpoint, title="Edit", top_level=False, request=request)
         form = EditEndpointForm(instance=endpoint)
 
-    product_tab = Product_Tab(endpoint.product.id, "Endpoint", tab="endpoints")
+    product_tab = Product_Tab(endpoint.product, "Endpoint", tab="endpoints")
 
     return render(request,
                   "dojo/edit_endpoint.html",
@@ -228,7 +236,7 @@ def delete_endpoint(request, eid):
     collector.collect([endpoint])
     rels = collector.nested()
 
-    product_tab = Product_Tab(endpoint.product.id, "Delete Endpoint", tab="endpoints")
+    product_tab = Product_Tab(endpoint.product, "Delete Endpoint", tab="endpoints")
 
     return render(request, 'dojo/delete_endpoint.html',
                   {'endpoint': endpoint,
@@ -258,7 +266,7 @@ def add_endpoint(request, pid):
                                  extra_tags='alert-success')
             return HttpResponseRedirect(reverse('endpoint') + "?product=" + pid)
 
-    product_tab = Product_Tab(product.id, "Add Endpoint", tab="endpoints")
+    product_tab = Product_Tab(product, "Add Endpoint", tab="endpoints")
 
     return render(request, template, {
         'product_tab': product_tab,
@@ -309,7 +317,7 @@ def add_meta_data(request, eid):
         form = DojoMetaDataForm()
 
     add_breadcrumb(parent=endpoint, title="Add Metadata", top_level=False, request=request)
-    product_tab = Product_Tab(endpoint.product.id, "Add Metadata", tab="endpoints")
+    product_tab = Product_Tab(endpoint.product, "Add Metadata", tab="endpoints")
     return render(request,
                   'dojo/add_endpoint_meta_data.html',
                   {'form': form,
@@ -343,7 +351,7 @@ def edit_meta_data(request, eid):
                              extra_tags='alert-success')
         return HttpResponseRedirect(reverse('view_endpoint', args=(eid,)))
 
-    product_tab = Product_Tab(endpoint.product.id, "Edit Metadata", tab="endpoints")
+    product_tab = Product_Tab(endpoint.product, "Edit Metadata", tab="endpoints")
     return render(request,
                   'dojo/edit_endpoint_meta_data.html',
                   {'endpoint': endpoint,
@@ -506,7 +514,7 @@ def import_endpoint_meta(request, pid):
             return HttpResponseRedirect(reverse('endpoint') + "?product=" + pid)
 
     add_breadcrumb(title="Endpoint Meta Importer", top_level=False, request=request)
-    product_tab = Product_Tab(product.id, title="Endpoint Meta Importer", tab="endpoints")
+    product_tab = Product_Tab(product, title="Endpoint Meta Importer", tab="endpoints")
     return render(request, 'dojo/endpoint_meta_importer.html', {
         'product_tab': product_tab,
         'form': form,
