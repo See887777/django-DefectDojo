@@ -5,7 +5,6 @@ name: Unit tests
 on:
   workflow_dispatch:
   pull_request:
-  push:
     branches:
       - master
       - dev
@@ -43,7 +42,7 @@ jobs:
           
       - name: Build
         id: docker_build
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           context: .
           push: false
