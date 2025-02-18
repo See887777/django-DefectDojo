@@ -25,7 +25,7 @@
 {% endif %}
 
 {% if finding.cvssv3_score %}
-*CVSSv3 Score:* {{ finding.cvssv3_score }}
+*CVSSv3 Score:* {{ finding.cvssv3_score }} {% if finding.cvssv3 %}({{ finding.cvssv3 }}){% endif %}
 {% endif %}
 
 *Product/Engagement/Test:* [{{ finding.test.engagement.product.name }}|{{ product_url|full_url }}] / [{{ finding.test.engagement.name }}|{{ engagement_url|full_url }}] / [{{ finding.test }}|{{ test_url|full_url }}]
@@ -61,7 +61,9 @@
 *Source Line*: {{ finding.sast_source_line }}
 *Sink Object*: {{ finding.sast_sink_object }}
 {% elif finding.static_finding %}
-{% if finding.file_path %}
+{% if finding.file_path and finding.get_file_path_with_raw_link %}
+*Source File*: [{{ finding.file_path }} | {{ finding.get_file_path_with_raw_link }}]
+{% elif finding.file_path %}
 *Source File*: {{ finding.file_path }}
 {% endif %}
 {% if finding.line %}
@@ -70,26 +72,26 @@
 {% endif %}
 
 *Description*:
-{{ finding.description }}
+{{ finding.description|safe }}
 
 {% if finding.mitigation %}
 *Mitigation*:
-{{ finding.mitigation }}
+{{ finding.mitigation|safe }}
 {% endif %}
 
-{% if finding.impact %}
+{% if finding.impact|safe %}
 *Impact*:
 {{ finding.impact }}
 {% endif %}
 
 {% if finding.steps_to_reproduce %}
 *Steps to reproduce*:
-{{ finding.steps_to_reproduce }}
+{{ finding.steps_to_reproduce|safe }}
 {% endif %}
 
 {% if finding.references %}
 *References*:
-{{ finding.references }}
+{{ finding.references|safe }}
 {% endif %}
 
 *Reporter:* [{{ finding.reporter|full_name}} ({{ finding.reporter.email }})|mailto:{{ finding.reporter.email }}]
